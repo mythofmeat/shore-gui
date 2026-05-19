@@ -1,6 +1,6 @@
 # shore-gui
 
-Desktop GUI client for the [Silvershore](https://github.com/mythofmeat/silvershore)
+Desktop GUI client for the [Shore](https://github.com/mythofmeat/shore-core)
 chat daemon, built with [Tauri 2](https://tauri.app).
 
 **Status:** work in progress. Not feature-complete; expect breakage and
@@ -24,7 +24,7 @@ pnpm tauri dev
 
 - [`shore-protocol`](https://crates.io/crates/shore-protocol) — SWP wire types
 - [`shore-swp-client`](https://crates.io/crates/shore-swp-client) — async SWP client
-- [silvershore](https://github.com/mythofmeat/silvershore) — daemon and CLI
+- [`shore-core`](https://github.com/mythofmeat/shore-core) — daemon and CLI
 
 ## License
 
