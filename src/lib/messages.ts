@@ -155,7 +155,8 @@ export function messageFromStreamEnd(
     msg_id: msgId,
     role: "assistant",
     content,
-    timestamp: new Date().toISOString(),
+    timestamp:
+      stringValue(frame.timestamp) ?? activeStream?.startedAt ?? new Date().toISOString(),
     images: activeStream?.images ?? [],
     content_blocks: content ? [{ type: "text", text: content }] : [],
     metadata: frame.metadata,
@@ -227,17 +228,17 @@ function contentFromBlocks(blocks: unknown): string | null {
   const parts = blocks.flatMap((block) => {
     if (!isRecord(block)) return [];
     if (block.type === "text") {
-      const text = stringValue(block.text)?.trim();
-      return text ? [text] : [];
+      const text = stringValue(block.text);
+      return text !== null ? [text] : [];
     }
     if (block.type === "tool_result") {
-      const content = stringValue(block.content)?.trim();
-      return content ? [content] : [];
+      const content = stringValue(block.content);
+      return content !== null ? [content] : [];
     }
     return [];
   });
 
-  return parts.join("\n");
+  return parts.length > 0 ? parts.join("\n") : null;
 }
 
 function stringValue(value: unknown): string | null {

@@ -323,11 +323,7 @@ function reduceFrame(state: DaemonState, frame: ServerMessageEvent): DaemonState
     case "new_message":
       return reduceNewMessageFrame(state, frame);
     case "stream_start":
-      return {
-        ...state,
-        activeStream: newStreamDraft(frame),
-        lastStreamEnd: null,
-      };
+      return reduceStreamStartFrame(state, frame);
     case "stream_chunk":
       return reduceStreamChunkFrame(state, frame);
     case "phase":
@@ -372,6 +368,19 @@ function reduceFrame(state: DaemonState, frame: ServerMessageEvent): DaemonState
         ),
       );
   }
+}
+
+function reduceStreamStartFrame(state: DaemonState, frame: ServerMessageEvent): DaemonState {
+  const stream = ensureStream(state.activeStream, frame);
+  return {
+    ...state,
+    activeStream: {
+      ...stream,
+      rid: stream.rid ?? stringValue(frame.rid),
+      regen: stream.regen || frame.regen === true,
+    },
+    lastStreamEnd: null,
+  };
 }
 
 function reduceHistoryFrame(state: DaemonState, frame: ServerMessageEvent): DaemonState {
@@ -486,6 +495,9 @@ function reduceSendImageFrame(state: DaemonState, frame: ServerMessageEvent): Da
 }
 
 function reduceStreamEndFrame(state: DaemonState, frame: ServerMessageEvent): DaemonState {
+  const revision = numericValue(frame.revision);
+  if (isStaleRevision(state, revision)) return state;
+
   const isFinal = frame.is_final !== false;
   const content = stringValue(frame.content);
   const currentStream = ensureStream(state.activeStream, frame);
@@ -500,7 +512,6 @@ function reduceStreamEndFrame(state: DaemonState, frame: ServerMessageEvent): Da
     };
   }
 
-  const revision = numericValue(frame.revision);
   const message = messageFromStreamEnd(frame, stream);
   return {
     ...state,
