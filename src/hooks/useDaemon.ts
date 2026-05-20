@@ -371,7 +371,7 @@ function reduceFrame(state: DaemonState, frame: ServerMessageEvent): DaemonState
 }
 
 function reduceStreamStartFrame(state: DaemonState, frame: ServerMessageEvent): DaemonState {
-  const stream = ensureStream(state.activeStream, frame);
+  const stream = matchingStream(state.activeStream, frame) ?? newStreamDraft(frame);
   return {
     ...state,
     activeStream: {
@@ -417,7 +417,9 @@ function reduceNewMessageFrame(state: DaemonState, frame: ServerMessageEvent): D
 }
 
 function reduceStreamChunkFrame(state: DaemonState, frame: ServerMessageEvent): DaemonState {
-  const stream = ensureStream(state.activeStream, frame);
+  const stream = matchingStream(state.activeStream, frame);
+  if (!stream) return state;
+
   const text = stringValue(frame.text) ?? "";
   const contentType = stringValue(frame.content_type) ?? "text";
 
@@ -431,7 +433,9 @@ function reduceStreamChunkFrame(state: DaemonState, frame: ServerMessageEvent): 
 }
 
 function reducePhaseFrame(state: DaemonState, frame: ServerMessageEvent): DaemonState {
-  const stream = ensureStream(state.activeStream, frame);
+  const stream = matchingStream(state.activeStream, frame);
+  if (!stream) return state;
+
   return {
     ...state,
     activeStream: {
@@ -443,7 +447,9 @@ function reducePhaseFrame(state: DaemonState, frame: ServerMessageEvent): Daemon
 }
 
 function reduceToolCallFrame(state: DaemonState, frame: ServerMessageEvent): DaemonState {
-  const stream = ensureStream(state.activeStream, frame);
+  const stream = matchingStream(state.activeStream, frame);
+  if (!stream) return state;
+
   const call = toolActivityFromFrame(frame);
   if (!call) return state;
 
@@ -458,7 +464,9 @@ function reduceToolCallFrame(state: DaemonState, frame: ServerMessageEvent): Dae
 }
 
 function reduceToolResultFrame(state: DaemonState, frame: ServerMessageEvent): DaemonState {
-  const stream = ensureStream(state.activeStream, frame);
+  const stream = matchingStream(state.activeStream, frame);
+  if (!stream) return state;
+
   const result = toolActivityFromFrame(frame);
   if (!result) return state;
 
@@ -472,7 +480,9 @@ function reduceToolResultFrame(state: DaemonState, frame: ServerMessageEvent): D
 }
 
 function reduceSendImageFrame(state: DaemonState, frame: ServerMessageEvent): DaemonState {
-  const stream = ensureStream(state.activeStream, frame);
+  const stream = matchingStream(state.activeStream, frame);
+  if (!stream) return state;
+
   const path = stringValue(frame.path);
   if (!path) return state;
 
@@ -500,7 +510,10 @@ function reduceStreamEndFrame(state: DaemonState, frame: ServerMessageEvent): Da
 
   const isFinal = frame.is_final !== false;
   const content = stringValue(frame.content);
-  const currentStream = ensureStream(state.activeStream, frame);
+  const currentStream = matchingStream(state.activeStream, frame);
+  const nextRevision = Math.max(state.revision, revision ?? state.revision);
+  if (!currentStream) return state;
+
   const stream = content
     ? { ...currentStream, content: longest(currentStream.content, content) }
     : currentStream;
@@ -509,6 +522,7 @@ function reduceStreamEndFrame(state: DaemonState, frame: ServerMessageEvent): Da
     return {
       ...state,
       activeStream: stream,
+      revision: nextRevision,
     };
   }
 
@@ -516,7 +530,7 @@ function reduceStreamEndFrame(state: DaemonState, frame: ServerMessageEvent): Da
   return {
     ...state,
     history: message ? appendOrReplaceMessage(state.history, message) : state.history,
-    revision: Math.max(state.revision, revision ?? state.revision),
+    revision: nextRevision,
     activeStream: null,
     lastStreamEnd: frame,
   };
@@ -586,14 +600,12 @@ function newStreamDraft(frame: ServerMessageEvent): ActiveStreamDraft {
   };
 }
 
-function ensureStream(
+function matchingStream(
   stream: ActiveStreamDraft | null,
   frame: ServerMessageEvent,
-): ActiveStreamDraft {
+): ActiveStreamDraft | null {
   const rid = stringValue(frame.rid);
-  if (!stream || (rid && stream.rid && stream.rid !== rid)) {
-    return newStreamDraft(frame);
-  }
+  if (!stream || (rid && stream.rid && stream.rid !== rid)) return null;
   return stream;
 }
 

@@ -238,7 +238,7 @@ function contentFromBlocks(blocks: unknown): string | null {
     return [];
   });
 
-  return parts.length > 0 ? parts.join("\n") : null;
+  return parts.length > 0 ? parts.join("") : null;
 }
 
 function stringValue(value: unknown): string | null {
