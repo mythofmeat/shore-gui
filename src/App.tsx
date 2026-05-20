@@ -1,10 +1,10 @@
-import { Fragment, useEffect, useMemo, useRef } from "react";
+import { Fragment, useEffect, useRef } from "react";
 import { useDaemon } from "./hooks/useDaemon.ts";
 import { useAssistantMessageNotifications } from "./hooks/useNotifications.ts";
 import { Composer } from "./components/Composer.tsx";
 import { Message } from "./components/Message.tsx";
 import { TimeGap } from "./components/TimeGap.tsx";
-import { deriveMessages, literaryDuration } from "./lib/messages.ts";
+import { literaryDuration } from "./lib/messages.ts";
 
 const DEFAULT_CHARACTER_NAME = "Shore";
 // How close to the bottom (in px) counts as "following" — auto-scroll only
@@ -13,7 +13,7 @@ const STICK_TO_BOTTOM_PX = 120;
 
 export default function App() {
   const daemon = useDaemon();
-  const { status, events, streaming, lastStreamEnd, connect, cancel, send } =
+  const { status, messages, streaming, lastStreamEnd, connect, cancel, send } =
     daemon;
 
   const characterName =
@@ -23,7 +23,6 @@ export default function App() {
 
   useAssistantMessageNotifications(lastStreamEnd, characterName);
 
-  const messages = useMemo(() => deriveMessages(events), [events]);
   const connected = status?.kind === "connected";
 
   // Esc cancels an in-flight stream

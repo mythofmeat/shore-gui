@@ -1,8 +1,11 @@
 #[cfg(target_os = "linux")]
 mod tray_linux;
 
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{SystemTime, UNIX_EPOCH};
+
 use serde::Serialize;
-use shore_protocol::client_msg::{Cancel, ClientMessage, ClientMessageBody};
+use shore_protocol::client_msg::{Cancel, ClientMessage, ClientMessageBody, Command};
 use shore_swp_client::{spawn_connection, ConnCommand, ConnEvent};
 #[cfg(not(target_os = "linux"))]
 use tauri::{
@@ -15,6 +18,7 @@ use tracing::{debug, warn};
 
 const CLIENT_TYPE: &str = "gui";
 const CLIENT_NAME: &str = "shore-gui";
+static RID_SEQ: AtomicU64 = AtomicU64::new(1);
 
 pub(crate) struct AppState {
     pub(crate) connection: Mutex<Option<mpsc::Sender<ConnCommand>>>,
@@ -29,6 +33,7 @@ enum ConnectionStatus {
         selected_character: Option<String>,
         history: Vec<shore_protocol::types::Message>,
         config: serde_json::Value,
+        active_start: usize,
     },
     Disconnected {
         reason: String,
@@ -58,7 +63,7 @@ async fn connect(
                     server_name,
                     characters,
                     history,
-                    active_start: _,
+                    active_start,
                     config,
                     selected_character,
                 } => {
@@ -72,6 +77,7 @@ async fn connect(
                             selected_character,
                             history,
                             config,
+                            active_start,
                         },
                     );
                 }
@@ -94,12 +100,13 @@ async fn connect(
 }
 
 #[tauri::command]
-async fn send_message(text: String, state: State<'_, AppState>) -> Result<(), String> {
+async fn send_message(text: String, state: State<'_, AppState>) -> Result<String, String> {
     let guard = state.connection.lock().await;
     let tx = guard.as_ref().ok_or("not connected")?;
+    let rid = make_rid("msg");
 
     let msg = ClientMessage::Message(ClientMessageBody {
-        rid: None,
+        rid: Some(rid.clone()),
         text,
         stream: true,
         images: vec![],
@@ -110,7 +117,40 @@ async fn send_message(text: String, state: State<'_, AppState>) -> Result<(), St
 
     tx.send(ConnCommand::Send(msg))
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+
+    Ok(rid)
+}
+
+#[tauri::command]
+async fn send_command(
+    name: String,
+    args: Option<serde_json::Value>,
+    rid: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<String, String> {
+    let command_name = name.trim();
+    if command_name.is_empty() {
+        return Err("command name is required".into());
+    }
+
+    let guard = state.connection.lock().await;
+    let tx = guard.as_ref().ok_or("not connected")?;
+    let rid = rid
+        .filter(|rid| !rid.trim().is_empty())
+        .unwrap_or_else(|| make_rid("cmd"));
+
+    let msg = ClientMessage::Command(Command {
+        rid: Some(rid.clone()),
+        name: command_name.to_string(),
+        args: args.unwrap_or_else(|| serde_json::json!({})),
+    });
+
+    tx.send(ConnCommand::Send(msg))
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(rid)
 }
 
 #[tauri::command]
@@ -140,6 +180,15 @@ fn emit<T: Serialize + Clone>(app: &AppHandle, event: &str, payload: T) {
     if let Err(e) = app.emit(event, payload) {
         warn!(%event, error = %e, "failed to emit Tauri event");
     }
+}
+
+fn make_rid(prefix: &str) -> String {
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or_default();
+    let seq = RID_SEQ.fetch_add(1, Ordering::Relaxed);
+    format!("{prefix}_{nanos}_{seq}")
 }
 
 #[cfg(not(target_os = "linux"))]
@@ -241,6 +290,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             connect,
             send_message,
+            send_command,
             cancel,
             disconnect,
             quit,

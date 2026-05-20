@@ -1,121 +1,167 @@
-import type { EventItem } from "../hooks/useDaemon.ts";
+export type MessageRole = "user" | "assistant" | "system";
+
+export interface ImageRef {
+  path: string;
+  caption?: string | null;
+  data?: string | null;
+}
+
+export interface ContentBlock {
+  type: string;
+  text?: string;
+  thinking?: string;
+  content?: string;
+  [key: string]: unknown;
+}
+
+export interface HistoryMessage {
+  msg_id: string;
+  role: MessageRole;
+  content: string;
+  timestamp: string;
+  images: ImageRef[];
+  content_blocks: ContentBlock[];
+  [key: string]: unknown;
+}
+
+export interface StreamToolActivity {
+  id: string;
+  name: string;
+  input?: unknown;
+  output?: string;
+  is_error?: boolean;
+}
+
+export interface ActiveStreamDraft {
+  rid: string | null;
+  content: string;
+  thinking: string;
+  startedAt: string;
+  phase: string | null;
+  model: string | null;
+  regen: boolean;
+  toolCalls: StreamToolActivity[];
+  toolResults: StreamToolActivity[];
+  images: ImageRef[];
+}
 
 export interface DisplayMessage {
   msg_id: string;
-  role: "user" | "assistant" | "system";
+  role: MessageRole;
   content: string;
   timestamp: string;
   streaming?: boolean;
-}
-
-interface ProtoMessage {
-  msg_id?: string;
-  role?: string;
-  content?: string;
-  timestamp?: string;
+  thinking?: string;
+  phase?: string | null;
+  model?: string | null;
+  toolCalls?: StreamToolActivity[];
+  toolResults?: StreamToolActivity[];
+  images?: ImageRef[];
 }
 
 const STREAMING_ID = "__streaming__";
 
-// Walk the event log and derive a displayable message list. Baseline comes
-// from History events (initial connect or subsequent full-history refresh);
-// live stream_chunk text is accumulated on top as a pending assistant entry.
-//
-// PR 2: text content_blocks only. Thinking / tool_use / images land in PR 3.
-export function deriveMessages(events: EventItem[]): DisplayMessage[] {
-  // 1. Baseline — history-source events (from initial connect) OR the
-  //    most recent `type: "history"` stream event (which replaces).
-  let baseline: ProtoMessage[] = [];
-  let lastHistoryRefreshIndex = -1;
+export function coerceHistoryMessages(values: unknown): HistoryMessage[] {
+  if (!Array.isArray(values)) return [];
+  return values.flatMap((value) => {
+    const message = coerceHistoryMessage(value);
+    return message ? [message] : [];
+  });
+}
 
-  for (let i = 0; i < events.length; i++) {
-    const e = events[i];
-    if (e.source === "history" && lastHistoryRefreshIndex < 0) {
-      baseline.push(e.message as unknown as ProtoMessage);
-      continue;
-    }
-    if (e.source === "stream") {
-      const msg = e.message as Record<string, unknown>;
-      if (msg.type === "history" && Array.isArray(msg.messages)) {
-        baseline = msg.messages as ProtoMessage[];
-        lastHistoryRefreshIndex = i;
-      }
-    }
-  }
+export function coerceHistoryMessage(value: unknown): HistoryMessage | null {
+  if (!isRecord(value)) return null;
 
-  // 2. Walk stream events AFTER the last history-refresh (or all events if
-  //    none), accumulating text from stream_chunk events. A turn may split
-  //    across multiple (StreamStart → chunks → StreamEnd) phases with
-  //    finish_reason == "tool_use" between them — keep accumulating until we
-  //    see a terminal StreamEnd.
-  let streamText = "";
-  let inStream = false;
+  const msgId = stringValue(value.msg_id);
+  if (!msgId) return null;
 
-  for (let i = lastHistoryRefreshIndex + 1; i < events.length; i++) {
-    const e = events[i];
-    if (e.source !== "stream") continue;
-    const msg = e.message as Record<string, unknown>;
-    switch (msg.type) {
-      case "stream_start":
-        // Only clear accumulated text when we weren't already mid-turn.
-        if (!inStream) streamText = "";
-        inStream = true;
-        break;
-      case "stream_chunk":
-        if (inStream && msg.content_type === "text" && typeof msg.text === "string") {
-          streamText += msg.text;
-        }
-        break;
-      case "stream_end":
-        if (msg.finish_reason !== "tool_use") {
-          inStream = false;
-          streamText = "";
-        }
-        break;
-      case "error":
-        inStream = false;
-        streamText = "";
-        break;
-    }
-  }
+  const role = normalizeRole(stringValue(value.role));
+  const content =
+    stringValue(value.content) ?? contentFromBlocks(value.content_blocks) ?? "";
+  const timestamp = stringValue(value.timestamp) ?? "";
+  const images = Array.isArray(value.images)
+    ? value.images.flatMap((image) => {
+        if (!isRecord(image)) return [];
+        const path = stringValue(image.path);
+        if (!path) return [];
+        return [
+          {
+            path,
+            caption: stringValue(image.caption),
+            data: stringValue(image.data),
+          },
+        ];
+      })
+    : [];
+  const contentBlocks = Array.isArray(value.content_blocks)
+    ? value.content_blocks.flatMap((block) =>
+        isRecord(block) && typeof block.type === "string"
+          ? [block as unknown as ContentBlock]
+          : [],
+      )
+    : [];
 
-  // 3. Materialize baseline messages.
-  const messages: DisplayMessage[] = baseline
-    .filter((m): m is ProtoMessage & { msg_id: string; role: string } =>
-      typeof m.msg_id === "string" && typeof m.role === "string",
-    )
-    .map((m) => ({
-      msg_id: m.msg_id,
-      role:
-        m.role === "user" || m.role === "assistant"
-          ? (m.role as "user" | "assistant")
-          : "system",
-      content: typeof m.content === "string" ? m.content : "",
-      timestamp: typeof m.timestamp === "string" ? m.timestamp : "",
-    }));
+  return {
+    ...value,
+    msg_id: msgId,
+    role,
+    content,
+    timestamp,
+    images,
+    content_blocks: contentBlocks,
+  };
+}
 
-  // 4. Append pending streaming message if we're mid-turn.
-  if (inStream) {
-    messages.push({
-      msg_id: STREAMING_ID,
+export function toDisplayMessages(
+  messages: HistoryMessage[],
+  activeStream: ActiveStreamDraft | null,
+): DisplayMessage[] {
+  const display: DisplayMessage[] = messages.map((message) => ({
+    msg_id: message.msg_id,
+    role: message.role,
+    content: message.content,
+    timestamp: message.timestamp,
+    images: message.images,
+  }));
+
+  if (activeStream) {
+    display.push({
+      msg_id: streamDisplayId(activeStream.rid),
       role: "assistant",
-      content: streamText,
-      timestamp: new Date().toISOString(),
+      content: activeStream.content,
+      timestamp: activeStream.startedAt,
       streaming: true,
+      thinking: activeStream.thinking,
+      phase: activeStream.phase,
+      model: activeStream.model,
+      toolCalls: activeStream.toolCalls,
+      toolResults: activeStream.toolResults,
+      images: activeStream.images,
     });
   }
 
-  console.log("[shore-gui] derive", {
-    eventsLen: events.length,
-    baselineLen: baseline.length,
-    inStream,
-    streamTextLen: streamText.length,
-    messagesLen: messages.length,
-    lastMessageRole: messages[messages.length - 1]?.role,
-    lastMessageStreaming: messages[messages.length - 1]?.streaming,
-  });
+  return display;
+}
 
-  return messages;
+export function messageFromStreamEnd(
+  frame: Record<string, unknown>,
+  activeStream: ActiveStreamDraft | null,
+): HistoryMessage | null {
+  const msgId = stringValue(frame.msg_id);
+  if (!msgId) return null;
+
+  const content = stringValue(frame.content) ?? activeStream?.content ?? "";
+  return {
+    msg_id: msgId,
+    role: "assistant",
+    content,
+    timestamp: new Date().toISOString(),
+    images: activeStream?.images ?? [],
+    content_blocks: content ? [{ type: "text", text: content }] : [],
+    metadata: frame.metadata,
+    revision: frame.revision,
+    finish_reason: frame.finish_reason,
+  };
 }
 
 export function formatTimestamp(iso: string): string {
@@ -128,21 +174,30 @@ export function formatTimestamp(iso: string): string {
 }
 
 const WORDS = [
-  "zero", "one", "two", "three", "four", "five", "six", "seven",
-  "eight", "nine", "ten", "eleven", "twelve",
+  "zero",
+  "one",
+  "two",
+  "three",
+  "four",
+  "five",
+  "six",
+  "seven",
+  "eight",
+  "nine",
+  "ten",
+  "eleven",
+  "twelve",
 ];
 
 function englishNumber(n: number): string {
   return WORDS[n] ?? String(n);
 }
 
-// Literary phrasing for the gap between two messages. Returns null when the
-// gap isn't long enough to call out (under an hour).
 export function literaryDuration(ms: number): string | null {
-  const HOUR = 60 * 60 * 1000;
-  if (ms < HOUR) return null;
+  const hour = 60 * 60 * 1000;
+  if (ms < hour) return null;
 
-  const hours = ms / HOUR;
+  const hours = ms / hour;
   const days = hours / 24;
 
   if (hours < 1.75) return "an hour passes";
@@ -155,4 +210,40 @@ export function literaryDuration(ms: number): string | null {
   if (days < 55) return "a month passes";
   if (days < 330) return `${englishNumber(Math.round(days / 30))} months pass`;
   return "a year passes";
+}
+
+function streamDisplayId(rid: string | null): string {
+  return rid ? `${STREAMING_ID}:${rid}` : STREAMING_ID;
+}
+
+function normalizeRole(role: string | null): MessageRole {
+  if (role === "user" || role === "assistant") return role;
+  return "system";
+}
+
+function contentFromBlocks(blocks: unknown): string | null {
+  if (!Array.isArray(blocks)) return null;
+
+  const parts = blocks.flatMap((block) => {
+    if (!isRecord(block)) return [];
+    if (block.type === "text") {
+      const text = stringValue(block.text)?.trim();
+      return text ? [text] : [];
+    }
+    if (block.type === "tool_result") {
+      const content = stringValue(block.content)?.trim();
+      return content ? [content] : [];
+    }
+    return [];
+  });
+
+  return parts.join("\n");
+}
+
+function stringValue(value: unknown): string | null {
+  return typeof value === "string" ? value : null;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
