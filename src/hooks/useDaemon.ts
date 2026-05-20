@@ -310,6 +310,7 @@ function reduceConnection(state: DaemonState, status: ConnectionStatus): DaemonS
     status,
     history: coerceHistoryMessages(status.history),
     activeStart: status.active_start,
+    revision: 0,
     activeStream: null,
     lastStreamEnd: null,
   };
