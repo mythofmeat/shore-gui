@@ -16,6 +16,18 @@ const components: Components = {
       </a>
     );
   },
+  img({ src, alt, ...rest }) {
+    return (
+      <img
+        src={src}
+        alt={alt ?? ""}
+        referrerPolicy="no-referrer"
+        loading="lazy"
+        decoding="async"
+        {...rest}
+      />
+    );
+  },
 };
 
 function MarkdownBodyImpl({ content, streaming }: MarkdownBodyProps) {
