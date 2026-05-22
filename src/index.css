@@ -186,6 +186,12 @@ main.stream {
 }
 .thinking[open] > summary::before { transform: rotate(90deg); }
 .thinking > summary:hover { color: var(--ink-mute); }
+.thinking > summary:focus-visible {
+  outline: 2px solid var(--ember);
+  outline-offset: 2px;
+  border-radius: 2px;
+  color: var(--ink);
+}
 .thinking-body {
   margin-top: 6px;
   white-space: pre-wrap;
