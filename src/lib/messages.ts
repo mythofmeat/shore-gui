@@ -116,13 +116,17 @@ export function toDisplayMessages(
   messages: HistoryMessage[],
   activeStream: ActiveStreamDraft | null,
 ): DisplayMessage[] {
-  const display: DisplayMessage[] = messages.map((message) => ({
-    msg_id: message.msg_id,
-    role: message.role,
-    content: message.content,
-    timestamp: message.timestamp,
-    images: message.images,
-  }));
+  const display: DisplayMessage[] = messages.map((message) => {
+    const thinking = thinkingFromBlocks(message.content_blocks);
+    return {
+      msg_id: message.msg_id,
+      role: message.role,
+      content: message.content,
+      timestamp: message.timestamp,
+      images: message.images,
+      thinking: thinking || undefined,
+    };
+  });
 
   if (activeStream) {
     display.push({
@@ -151,6 +155,10 @@ export function messageFromStreamEnd(
   if (!msgId) return null;
 
   const content = stringValue(frame.content) ?? activeStream?.content ?? "";
+  const thinking = activeStream?.thinking ?? "";
+  const blocks: ContentBlock[] = [];
+  if (thinking) blocks.push({ type: "thinking", thinking });
+  if (content) blocks.push({ type: "text", text: content });
   return {
     msg_id: msgId,
     role: "assistant",
@@ -158,7 +166,7 @@ export function messageFromStreamEnd(
     timestamp:
       stringValue(frame.timestamp) ?? activeStream?.startedAt ?? new Date().toISOString(),
     images: activeStream?.images ?? [],
-    content_blocks: content ? [{ type: "text", text: content }] : [],
+    content_blocks: blocks,
     metadata: frame.metadata,
     revision: frame.revision,
     finish_reason: frame.finish_reason,
@@ -220,6 +228,15 @@ function streamDisplayId(rid: string | null): string {
 function normalizeRole(role: string | null): MessageRole {
   if (role === "user" || role === "assistant") return role;
   return "system";
+}
+
+function thinkingFromBlocks(blocks: ContentBlock[]): string {
+  const parts = blocks.flatMap((block) => {
+    if (block.type !== "thinking") return [];
+    const text = stringValue(block.thinking) ?? stringValue(block.text);
+    return text ? [text] : [];
+  });
+  return parts.join("");
 }
 
 function contentFromBlocks(blocks: unknown): string | null {

@@ -152,6 +152,46 @@ main.stream {
 }
 .msg.char .msg-meta { margin-top: 6px; margin-bottom: 0; }
 
+/* ---------- thinking block ---------- */
+.thinking {
+  margin: 0 0 10px;
+  padding: 8px 12px;
+  border-left: 2px solid var(--ink-ghost);
+  background: rgba(255, 255, 255, 0.015);
+  color: var(--ink-mute);
+  font-family: var(--font-user);
+  font-style: italic;
+  font-size: 14px;
+  line-height: 1.55;
+}
+.thinking > summary {
+  list-style: none;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-style: normal;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-ghost);
+  user-select: none;
+  outline: none;
+}
+.thinking > summary::-webkit-details-marker { display: none; }
+.thinking > summary::before {
+  content: "▸";
+  display: inline-block;
+  width: 1em;
+  color: var(--ink-ghost);
+  transition: transform 120ms ease;
+}
+.thinking[open] > summary::before { transform: rotate(90deg); }
+.thinking > summary:hover { color: var(--ink-mute); }
+.thinking-body {
+  margin-top: 6px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 /* ---------- markdown ---------- */
 .markdown > *:first-child { margin-top: 0; }
 .markdown > *:last-child { margin-bottom: 0; }
