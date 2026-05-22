@@ -1,4 +1,5 @@
 import { Sigil } from "./Sigil.tsx";
+import { MarkdownBody } from "./MarkdownBody.tsx";
 import { formatTimestamp, type DisplayMessage } from "../lib/messages.ts";
 
 interface MessageProps {
@@ -13,7 +14,7 @@ export function Message({ message, characterName }: MessageProps) {
   if (message.role === "user") {
     return (
       <div className="msg user">
-        {message.content}
+        <MarkdownBody content={message.content} />
         {time && <div className="msg-meta">{time}</div>}
       </div>
     );
@@ -27,8 +28,10 @@ export function Message({ message, characterName }: MessageProps) {
           <span className="name">{characterName}</span>
         </div>
         <div className="body">
-          {message.content}
-          {streaming && <span className="ember-cursor" />}
+          <MarkdownBody
+            content={message.content}
+            trailing={streaming ? <span className="ember-cursor" /> : null}
+          />
         </div>
         {!streaming && time && <div className="msg-meta">{time}</div>}
       </div>
@@ -37,7 +40,7 @@ export function Message({ message, characterName }: MessageProps) {
 
   return (
     <div className="msg user" style={{ opacity: 0.6, fontStyle: "italic" }}>
-      {message.content}
+      <MarkdownBody content={message.content} />
     </div>
   );
 }

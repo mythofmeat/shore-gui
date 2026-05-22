@@ -126,7 +126,6 @@ main.stream {
   color: var(--ink-dim);
   font-size: 15.5px;
   padding-left: 15%;
-  white-space: pre-wrap;
 }
 .msg.user .msg-meta { text-align: right; }
 
@@ -150,11 +149,116 @@ main.stream {
   line-height: 1.65;
   color: var(--ink-char);
   padding-right: 10%;
-  white-space: pre-wrap;
 }
-.msg.char .body p { margin: 0 0 12px 0; }
-.msg.char .body p:last-child { margin-bottom: 0; }
 .msg.char .msg-meta { margin-top: 6px; margin-bottom: 0; }
+
+/* ---------- markdown ---------- */
+.markdown > *:first-child { margin-top: 0; }
+.markdown > *:last-child { margin-bottom: 0; }
+.markdown p { margin: 0 0 12px 0; }
+.markdown h1, .markdown h2, .markdown h3,
+.markdown h4, .markdown h5, .markdown h6 {
+  font-family: var(--font-char);
+  font-variation-settings: "wght" 600;
+  color: var(--ink);
+  margin: 18px 0 8px;
+  line-height: 1.25;
+  letter-spacing: 0.005em;
+}
+.markdown h1 { font-size: 1.5em; }
+.markdown h2 { font-size: 1.3em; }
+.markdown h3 { font-size: 1.15em; }
+.markdown h4 { font-size: 1.05em; }
+.markdown h5, .markdown h6 {
+  font-size: 0.95em;
+  color: var(--ink-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.markdown strong { font-variation-settings: "wght" 620; color: var(--ink); }
+.markdown em { font-style: italic; }
+.markdown a {
+  color: var(--ember);
+  text-decoration: underline;
+  text-decoration-color: var(--ember-dim);
+  text-underline-offset: 2px;
+}
+.markdown a:hover { text-shadow: 0 0 8px var(--ember-glow); }
+.markdown ul, .markdown ol { margin: 0 0 12px; padding-left: 1.4em; }
+.markdown ul { list-style: disc; }
+.markdown ol { list-style: decimal; }
+.markdown li { margin: 2px 0; }
+.markdown li > p { margin: 0 0 6px; }
+.markdown li > ul, .markdown li > ol { margin-bottom: 4px; }
+.markdown blockquote {
+  margin: 0 0 12px;
+  padding: 2px 0 2px 14px;
+  border-left: 2px solid var(--ember-dim);
+  color: var(--ink-dim);
+  font-style: italic;
+}
+.markdown blockquote > *:last-child { margin-bottom: 0; }
+.markdown code {
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  background: var(--bg-elev);
+  color: var(--ink);
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid var(--rule);
+}
+.markdown pre {
+  background: var(--bg-elev);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 10px 12px;
+  margin: 0 0 12px;
+  overflow-x: auto;
+  font-size: 0.88em;
+  line-height: 1.5;
+}
+.markdown pre code {
+  background: transparent;
+  border: none;
+  padding: 0;
+  font-size: inherit;
+  color: var(--ink);
+}
+.markdown hr {
+  border: 0;
+  height: 1px;
+  background: linear-gradient(to right, transparent, var(--ink-ghost), transparent);
+  margin: 18px 0;
+}
+.markdown table {
+  border-collapse: collapse;
+  margin: 0 0 12px;
+  font-size: 0.92em;
+  display: block;
+  overflow-x: auto;
+  max-width: 100%;
+}
+.markdown th, .markdown td {
+  border: 1px solid var(--rule);
+  padding: 6px 10px;
+  text-align: left;
+}
+.markdown th {
+  background: var(--bg-elev);
+  font-variation-settings: "wght" 580;
+  color: var(--ink);
+}
+.markdown img { max-width: 100%; border-radius: 3px; }
+
+/* user-side markdown overrides — right-aligned, parchment-on-cream */
+.msg.user .markdown { text-align: right; }
+.msg.user .markdown ul, .msg.user .markdown ol {
+  display: inline-block;
+  text-align: left;
+}
+.msg.user .markdown pre,
+.msg.user .markdown table,
+.msg.user .markdown blockquote { text-align: left; }
 
 /* streaming ember cursor */
 .ember-cursor {
