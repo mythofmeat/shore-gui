@@ -1,11 +1,11 @@
-import { memo, type ReactNode } from "react";
+import { memo } from "react";
 import ReactMarkdown, { defaultUrlTransform, type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
 
 interface MarkdownBodyProps {
   content: string;
-  trailing?: ReactNode;
+  streaming?: boolean;
 }
 
 const components: Components = {
@@ -18,9 +18,10 @@ const components: Components = {
   },
 };
 
-function MarkdownBodyImpl({ content, trailing }: MarkdownBodyProps) {
+function MarkdownBodyImpl({ content, streaming }: MarkdownBodyProps) {
+  const className = streaming ? "markdown streaming" : "markdown";
   return (
-    <div className="markdown">
+    <div className={className}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkBreaks]}
         urlTransform={safeUrlTransform}
@@ -29,7 +30,7 @@ function MarkdownBodyImpl({ content, trailing }: MarkdownBodyProps) {
       >
         {content}
       </ReactMarkdown>
-      {trailing}
+      {streaming && content.length === 0 && <span className="ember-cursor" />}
     </div>
   );
 }

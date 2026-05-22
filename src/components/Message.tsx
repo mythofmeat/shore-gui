@@ -28,10 +28,7 @@ export function Message({ message, characterName }: MessageProps) {
           <span className="name">{characterName}</span>
         </div>
         <div className="body">
-          <MarkdownBody
-            content={message.content}
-            trailing={streaming ? <span className="ember-cursor" /> : null}
-          />
+          <MarkdownBody content={message.content} streaming={streaming} />
         </div>
         {!streaming && time && <div className="msg-meta">{time}</div>}
       </div>
