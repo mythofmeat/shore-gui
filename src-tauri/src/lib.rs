@@ -5,7 +5,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::Serialize;
-use shore_protocol::client_msg::{Cancel, ClientMessage, ClientMessageBody, Command};
+use shore_protocol::client_msg::{
+    Cancel, ClientMessage, ClientMessageBody, Command, ImageUpload, Regen,
+};
 use shore_swp_client::{spawn_connection, ConnCommand, ConnEvent};
 #[cfg(not(target_os = "linux"))]
 use tauri::{
@@ -100,7 +102,11 @@ async fn connect(
 }
 
 #[tauri::command]
-async fn send_message(text: String, state: State<'_, AppState>) -> Result<String, String> {
+async fn send_message(
+    text: String,
+    image_data: Option<Vec<ImageUpload>>,
+    state: State<'_, AppState>,
+) -> Result<String, String> {
     let guard = state.connection.lock().await;
     let tx = guard.as_ref().ok_or("not connected")?;
     let rid = make_rid("msg");
@@ -110,7 +116,7 @@ async fn send_message(text: String, state: State<'_, AppState>) -> Result<String
         text,
         stream: true,
         images: vec![],
-        image_data: vec![],
+        image_data: image_data.unwrap_or_default(),
         absence_seconds: None,
         overrides: None,
     });
@@ -154,12 +160,61 @@ async fn send_command(
 }
 
 #[tauri::command]
+async fn regen(
+    guidance: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<String, String> {
+    let guard = state.connection.lock().await;
+    let tx = guard.as_ref().ok_or("not connected")?;
+    let rid = make_rid("regen");
+
+    let msg = ClientMessage::Regen(Regen {
+        rid: Some(rid.clone()),
+        stream: true,
+        guidance: guidance.filter(|g| !g.trim().is_empty()),
+    });
+
+    tx.send(ConnCommand::Send(msg))
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(rid)
+}
+
+#[tauri::command]
 async fn cancel(state: State<'_, AppState>) -> Result<(), String> {
     let guard = state.connection.lock().await;
     let tx = guard.as_ref().ok_or("not connected")?;
     tx.send(ConnCommand::Send(ClientMessage::Cancel(Cancel {})))
         .await
         .map_err(|e| e.to_string())
+}
+
+/// An image read from disk for attachment (#17): the base name plus its
+/// base64-encoded bytes, ready to become a shore_protocol ImageUpload.
+#[derive(Serialize, Clone)]
+struct ReadImage {
+    filename: String,
+    data: String,
+}
+
+/// Read an image file the user picked via the dialog plugin and return its
+/// base64-encoded bytes. Done in Rust so we don't need an fs-scope capability
+/// or a JS filesystem plugin just to slurp a single user-selected file.
+#[tauri::command]
+async fn read_image_file(path: String) -> Result<ReadImage, String> {
+    use base64::Engine as _;
+
+    let bytes = tokio::fs::read(&path)
+        .await
+        .map_err(|e| format!("failed to read image: {e}"))?;
+    let filename = std::path::Path::new(&path)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("image")
+        .to_string();
+    let data = base64::engine::general_purpose::STANDARD.encode(&bytes);
+    Ok(ReadImage { filename, data })
 }
 
 #[tauri::command]
@@ -265,6 +320,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             app.manage(AppState {
                 connection: Mutex::new(None),
@@ -291,6 +347,8 @@ pub fn run() {
             connect,
             send_message,
             send_command,
+            read_image_file,
+            regen,
             cancel,
             disconnect,
             quit,
