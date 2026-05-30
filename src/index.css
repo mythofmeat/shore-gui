@@ -7,7 +7,18 @@
 @import "@fontsource/spectral/500.css";
 @import "@fontsource-variable/jetbrains-mono";
 
+/* ---------- theme tokens (#39) ----------
+   The palette lives in two mixins applied by data-theme:
+     - dark  : the original ember-on-warm-charcoal scheme (the brand default).
+     - light : a warm parchment scheme — dark ink on aged paper, SAME ember.
+   `:root` defaults to dark; with no explicit data-theme ("system"), the
+   prefers-color-scheme media query below swaps in the light palette. An
+   explicit data-theme="dark"/"light" pins it regardless of OS.
+
+   Non-color tokens (fonts, density, font-scale) are theme-independent and set
+   once here. */
 :root {
+  /* dark palette (default) */
   --bg: #1f1916;
   --bg-elev: #2a221d;
   --ink: #f0e8de;
@@ -26,6 +37,82 @@
   --font-user: "Spectral", Georgia, serif;
   /* machine voice (timestamps, tool calls) */
   --font-mono: "JetBrains Mono Variable", ui-monospace, monospace;
+
+  /* effective message-body family, switched by data-font-family below */
+  --font-body: var(--font-char);
+
+  /* body font multiplier, driven by UiSettingsEffects (--font-scale) */
+  --font-scale: 1;
+
+  /* density spacing scale (cozy default; compact tightens it below) */
+  --density-stream-pad: 48px;
+  --density-msg-gap: 32px;
+}
+
+/* Explicit pins. data-theme="light" applies the warm parchment palette — warm
+   paper, dark ink, the same ember accent (not stark white, no cold greys).
+   data-theme="dark" restates the defaults so it overrides the system media
+   query below. */
+:root[data-theme="light"] {
+  --bg: #f4ecde;
+  --bg-elev: #ece1cd;
+  --ink: #2c2118;
+  --ink-char: #3a2d20;
+  --ink-dim: #5c4c3a;
+  --ink-mute: #8a7458;
+  --ink-ghost: #b3a282;
+  --ember: #c75d18;
+  --ember-dim: #a8420f;
+  --ember-glow: rgba(199, 93, 24, 0.16);
+  --rule: #d8c9ad;
+}
+:root[data-theme="dark"] {
+  --bg: #1f1916;
+  --bg-elev: #2a221d;
+  --ink: #f0e8de;
+  --ink-char: #dcd2c7;
+  --ink-dim: #bdb1a4;
+  --ink-mute: #857866;
+  --ink-ghost: #5a4f44;
+  --ember: #ee8a3a;
+  --ember-dim: #d05020;
+  --ember-glow: rgba(238, 138, 58, 0.22);
+  --rule: #342a24;
+}
+
+/* System theme: when no explicit data-theme is set, honor the OS preference. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    --bg: #f4ecde;
+    --bg-elev: #ece1cd;
+    --ink: #2c2118;
+    --ink-char: #3a2d20;
+    --ink-dim: #5c4c3a;
+    --ink-mute: #8a7458;
+    --ink-ghost: #b3a282;
+    --ember: #c75d18;
+    --ember-dim: #a8420f;
+    --ember-glow: rgba(199, 93, 24, 0.16);
+    --rule: #d8c9ad;
+  }
+}
+
+/* ---------- density (#39) ----------
+   Compact tightens the stream padding and inter-message gap; everything else
+   (token-driven) is left alone so the look stays coherent. */
+:root[data-density="compact"] {
+  --density-stream-pad: 28px;
+  --density-msg-gap: 22px;
+}
+
+/* ---------- message body family (#39) ----------
+   data-font-family overrides the character-voice family used for assistant
+   message bodies + markdown headings; "default" keeps the Commissioner sans. */
+:root[data-font-family="sans"] {
+  --font-body: "Commissioner Variable", system-ui, sans-serif;
+}
+:root[data-font-family="serif"] {
+  --font-body: "Spectral", Georgia, serif;
 }
 
 * { box-sizing: border-box; }
@@ -44,7 +131,7 @@ html, body {
 body {
   font-family: var(--font-user);
   font-weight: 400;
-  font-size: 16px;
+  font-size: calc(16px * var(--font-scale));
   line-height: 1.6;
   letter-spacing: 0.01em;
   -webkit-font-smoothing: antialiased;
@@ -119,7 +206,7 @@ main.stream {
 .stream-inner {
   max-width: 680px;
   margin: 0 auto;
-  padding: 48px 0;
+  padding: var(--density-stream-pad) 0;
 }
 
 /* ---------- time gap ---------- */
@@ -193,7 +280,7 @@ main.stream {
 .clear-undo-btn:hover { color: var(--ember-dim); }
 
 /* ---------- messages ---------- */
-.msg { margin-bottom: 32px; position: relative; }
+.msg { margin-bottom: var(--density-msg-gap); position: relative; }
 .msg-meta {
   font-family: var(--font-mono);
   font-size: 10px;
@@ -224,7 +311,7 @@ main.stream {
   font-weight: 500;
 }
 .msg.char .body {
-  font-family: var(--font-char);
+  font-family: var(--font-body);
   font-variation-settings: "wght" 380;
   font-size: 17px;
   line-height: 1.65;
@@ -520,7 +607,7 @@ main.stream {
 .markdown p { margin: 0 0 12px 0; }
 .markdown h1, .markdown h2, .markdown h3,
 .markdown h4, .markdown h5, .markdown h6 {
-  font-family: var(--font-char);
+  font-family: var(--font-body);
   font-variation-settings: "wght" 600;
   color: var(--ink);
   margin: 18px 0 8px;
@@ -1730,4 +1817,47 @@ footer.composer {
 }
 .sampler-select {
   cursor: pointer;
+}
+
+/* ---------- reduced motion (#39) ----------
+   The ember glyph + streaming cursor pulse continuously, which is the main
+   source of ambient motion. Soften it when the OS asks, or via the manual
+   override (data-reduced-motion="on" forces it off; "off" forces it on
+   regardless of the OS — useful for testing / personal preference).
+
+   We freeze the ember keyframes to a steady mid-glow rather than hard-stopping
+   them at an arbitrary frame, and drop the one-shot rise/slide entrances. */
+@media (prefers-reduced-motion: reduce) {
+  :root:not([data-reduced-motion="off"]) .sigil,
+  :root:not([data-reduced-motion="off"]) .sigil.streaming {
+    animation: none;
+    opacity: 0.85;
+  }
+  :root:not([data-reduced-motion="off"]) .markdown.streaming > *:last-child::after,
+  :root:not([data-reduced-motion="off"]) .ember-cursor {
+    animation: none;
+    opacity: 0.9;
+  }
+  :root:not([data-reduced-motion="off"]) .cmd-palette,
+  :root:not([data-reduced-motion="off"]) .notice-toast,
+  :root:not([data-reduced-motion="off"]) .notices-panel {
+    animation: none;
+  }
+}
+
+/* Manual "on" override: force the same softening regardless of OS setting. */
+:root[data-reduced-motion="on"] .sigil,
+:root[data-reduced-motion="on"] .sigil.streaming {
+  animation: none;
+  opacity: 0.85;
+}
+:root[data-reduced-motion="on"] .markdown.streaming > *:last-child::after,
+:root[data-reduced-motion="on"] .ember-cursor {
+  animation: none;
+  opacity: 0.9;
+}
+:root[data-reduced-motion="on"] .cmd-palette,
+:root[data-reduced-motion="on"] .notice-toast,
+:root[data-reduced-motion="on"] .notices-panel {
+  animation: none;
 }
