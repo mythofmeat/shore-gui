@@ -17,6 +17,7 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-notification = "2"
 tauri-plugin-dialog = "2"
+tauri-plugin-global-shortcut = "2"
 shore-swp-client = "0.2"
 shore-protocol = "0.2"
 tokio = { version = "1", features = ["full"] }
@@ -25,6 +26,12 @@ serde_json = { version = "1", features = ["preserve_order"] }
 base64 = "0.22"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
+# Link unfurl (#40): a deliberately small HTTP client. default-features=false
+# drops the default native-tls + many extras; rustls-tls keeps us free of an
+# OpenSSL system dependency. We hand-roll the tiny OpenGraph/<title> head scrape
+# (no html5ever/scraper) to avoid pulling a heavy HTML tree into a size-tuned
+# binary. Fetching only ever happens when the frontend explicitly opts in.
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 ksni = "0.3"
