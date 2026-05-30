@@ -2,6 +2,12 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
 import type { ImageUpload } from "../hooks/useDaemon.ts";
+import { useUiSettings } from "../hooks/useUiSettings.ts";
+import { EditDiff } from "./EditDiff.tsx";
+import { MSG_DRAG_MIME, isImageFile, fileToBase64 } from "../lib/dnd.ts";
+import { startDictation, stopDictation, dictationSupported } from "../lib/speech.ts";
+import "../styles/dnd.css";
+import "../styles/speech.css";
 
 /**
  * Describes an in-progress per-message edit (#11). When present, the composer
@@ -85,6 +91,15 @@ export function Composer({
   editing,
 }: ComposerProps) {
   const [text, setText] = useState("");
+  // Native (OS/WebView) spellcheck toggle (#41). Defaults on; the toggle lives
+  // in Preferences. We only consume the value here.
+  const { composerSpellcheck } = useUiSettings();
+  // Edit-message diff (#26): show old→new while editing; toggle to hide.
+  const [showDiff, setShowDiff] = useState(true);
+  // Drag-and-drop (#33): highlight while a droppable item hovers the composer.
+  const [dragOver, setDragOver] = useState(false);
+  // Push-to-talk dictation (#38).
+  const [listening, setListening] = useState(false);
   // Queue of images attached to the NEXT message (#17). Cleared after send.
   const [images, setImages] = useState<PendingImage[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -241,6 +256,75 @@ export function Composer({
     editing?.onCancel();
   };
 
+  // Append quoted/dictated text to the current draft and focus the composer.
+  const appendText = (addition: string, separator = "\n") => {
+    if (!addition) return;
+    setText((prev) => {
+      const sep = prev.length > 0 && !prev.endsWith(separator) ? separator : "";
+      return `${prev}${sep}${addition}`;
+    });
+    requestAnimationFrame(() => textareaRef.current?.focus());
+  };
+
+  // Drag-and-drop (#33): the composer accepts a message dragged from history
+  // (quote it) and image files dropped in (queue them as attachments).
+  const onDragOver = (e: React.DragEvent<HTMLElement>) => {
+    if (editing) return;
+    const types = Array.from(e.dataTransfer.types);
+    if (!types.includes("Files") && !types.includes(MSG_DRAG_MIME)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+    setDragOver(true);
+  };
+  const onDragLeave = (e: React.DragEvent<HTMLElement>) => {
+    if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+    setDragOver(false);
+  };
+  const onDrop = (e: React.DragEvent<HTMLElement>) => {
+    if (editing) return;
+    setDragOver(false);
+    const quoted = e.dataTransfer.getData(MSG_DRAG_MIME);
+    if (quoted) {
+      e.preventDefault();
+      appendText(quoted);
+      return;
+    }
+    const files = Array.from(e.dataTransfer.files ?? []).filter(isImageFile);
+    if (files.length > 0) {
+      e.preventDefault();
+      for (const file of files) {
+        void fileToBase64(file)
+          .then((data) => addImage(file.name || "dropped.png", data))
+          .catch((err) => console.error("dropped image failed", err));
+      }
+    }
+  };
+
+  // Push-to-talk dictation (#38): append final transcript segments to the draft.
+  const toggleDictation = () => {
+    if (listening) {
+      stopDictation();
+      setListening(false);
+      return;
+    }
+    const ok = startDictation(
+      (segment, isFinal) => {
+        if (isFinal) appendText(segment, " ");
+      },
+      () => setListening(false),
+    );
+    if (ok) setListening(true);
+  };
+  // Stop any in-flight dictation on unmount.
+  useEffect(() => () => stopDictation(), []);
+
+  // Tray quick-reply (#36) focuses the composer.
+  useEffect(() => {
+    const onFocus = () => textareaRef.current?.focus();
+    window.addEventListener("shore-gui:focus-composer", onFocus);
+    return () => window.removeEventListener("shore-gui:focus-composer", onFocus);
+  }, []);
+
   const placeholder = !connected
     ? "Not connected"
     : editing
@@ -248,7 +332,14 @@ export function Composer({
       : `Speak to ${characterName}...`;
 
   return (
-    <footer className={`composer${editing ? " composer-editing" : ""}`}>
+    <footer
+      className={`composer${editing ? " composer-editing" : ""}${
+        dragOver ? " composer-drop" : ""
+      }`}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
+    >
       <div className="input-wrap">
         {editing && (
           <div className="composer-edit-banner">
@@ -257,12 +348,25 @@ export function Composer({
             </span>
             <button
               type="button"
+              className="composer-diff-toggle"
+              onClick={() => setShowDiff((v) => !v)}
+            >
+              {showDiff ? "hide diff" : "show diff"}
+            </button>
+            <button
+              type="button"
               className="composer-edit-cancel"
               onClick={cancelEdit}
             >
               Cancel
             </button>
           </div>
+        )}
+        {editing && showDiff && (
+          <EditDiff before={editing.initialText} after={text} />
+        )}
+        {dragOver && (
+          <div className="composer-drop-hint">drop to attach / quote…</div>
         )}
         {!editing && images.length > 0 && (
           <div className="composer-attachments">
@@ -315,9 +419,45 @@ export function Composer({
               </svg>
             </button>
           )}
+          {!editing && dictationSupported() && (
+            <button
+              type="button"
+              className="composer-mic"
+              data-listening={listening}
+              onClick={toggleDictation}
+              disabled={!connected}
+              title={listening ? "Stop dictation" : "Dictate"}
+              aria-label={listening ? "Stop dictation" : "Dictate"}
+            >
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                <line x1="12" y1="19" x2="12" y2="23" />
+                <line x1="8" y1="23" x2="16" y2="23" />
+              </svg>
+            </button>
+          )}
           <textarea
             ref={textareaRef}
             rows={1}
+            // Native spellcheck + the right-click corrections / "add to
+            // dictionary" menu (#41). Driven by the Preferences toggle; OS/
+            // WebView handles the underlining and suggestions. Sentence-style
+            // autocapitalization and autocorrect suit prose; lang hints the
+            // dictionary. (WebKitGTK support varies — see report caveats.)
+            spellCheck={composerSpellcheck}
+            autoCapitalize="sentences"
+            autoCorrect="on"
+            lang="en"
             value={text}
             onChange={(e) => setText(e.target.value)}
             onPaste={handlePaste}
