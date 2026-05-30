@@ -1,0 +1,68 @@
+/* ---------- text-to-speech / dictation (#38) ---------- */
+
+/* Read-aloud toggle in the assistant name-line. Quiet until the row is hovered,
+   then a small ember glyph; stays visible while actively speaking. */
+.read-aloud {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-left: 2px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--ink-ghost);
+  cursor: pointer;
+  font-size: 10px;
+  line-height: 1;
+  opacity: 0;
+  transition: opacity 120ms ease, color 120ms ease;
+}
+.msg.char:hover .read-aloud {
+  opacity: 0.8;
+}
+.read-aloud:hover {
+  color: var(--ember);
+}
+.read-aloud[data-speaking="true"] {
+  opacity: 1;
+  color: var(--ember);
+}
+
+/* Push-to-talk mic button in the composer. */
+.composer-mic {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: none;
+  color: var(--ink-mute);
+  cursor: pointer;
+  padding: 4px;
+  transition: color 120ms ease;
+}
+.composer-mic:hover {
+  color: var(--ember);
+}
+.composer-mic[data-listening="true"] {
+  color: var(--ember);
+  animation: mic-pulse 1.3s ease-in-out infinite;
+}
+@keyframes mic-pulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .read-aloud,
+  .composer-mic {
+    transition: none;
+  }
+  .composer-mic[data-listening="true"] {
+    animation: none;
+  }
+}
+:root[data-reduced-motion="on"] .composer-mic[data-listening="true"] {
+  animation: none;
+}
