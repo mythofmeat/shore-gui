@@ -16,14 +16,28 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-notification = "2"
+tauri-plugin-dialog = "2"
 shore-swp-client = "0.2"
 shore-protocol = "0.2"
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
+base64 = "0.22"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 ksni = "0.3"
 png = "0.17"
+
+# Optimize the shipped binary for size. strip drops debug symbols (the biggest
+# single win), lto + codegen-units=1 let the optimizer work across crate
+# boundaries, opt-level "z" favors size over speed, and panic=abort removes
+# unwinding tables. A desktop GUI is not hot-loop-bound, so trading a little
+# runtime speed for a smaller binary is the right call here.
+[profile.release]
+strip = true
+lto = true
+opt-level = "z"
+codegen-units = 1
+panic = "abort"
