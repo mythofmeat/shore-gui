@@ -7,6 +7,8 @@ import {
   useRef,
   useState,
 } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { useDaemon } from "./hooks/useDaemon.ts";
 import { useAssistantMessageNotifications } from "./hooks/useNotifications.ts";
 import { Composer, type ComposerEdit } from "./components/Composer.tsx";
@@ -25,7 +27,16 @@ import { SamplerSettings } from "./components/SamplerSettings.tsx";
 import { StatusBar } from "./components/StatusBar.tsx";
 import { TimeGap } from "./components/TimeGap.tsx";
 import { FullscreenImageViewer } from "./components/FullscreenImageViewer.tsx";
+import { Preferences } from "./components/Preferences.tsx";
+import { TokenDashboard } from "./components/TokenDashboard.tsx";
+import { Timeline } from "./components/Timeline.tsx";
+import { SearchBar } from "./components/SearchBar.tsx";
+import { UiSettingsEffects } from "./components/UiSettingsEffects.tsx";
+import { useGlobalHotkey } from "./hooks/useGlobalHotkey.ts";
+import { useUiSettings } from "./hooks/useUiSettings.ts";
+import { speak } from "./lib/speech.ts";
 import { literaryDuration } from "./lib/messages.ts";
+import { searchMessages } from "./lib/search.ts";
 import { useClearMarker, isClearedSystemMessage } from "./hooks/useClearMarker.ts";
 import { useImageGallery } from "./hooks/useImageGallery.ts";
 import { DAEMON_COMMANDS } from "./lib/commands.ts";
@@ -68,6 +79,17 @@ export default function App() {
   const [characterOpen, setCharacterOpen] = useState(false);
   const [modelOpen, setModelOpen] = useState(false);
   const [settingOpen, setSettingOpen] = useState(false);
+  // GUI-native overlays: Preferences (#39) and the token/cost dashboard (#34).
+  const [preferencesOpen, setPreferencesOpen] = useState(false);
+  const [tokenOpen, setTokenOpen] = useState(false);
+  // Timeline (#29): the topmost visible message, reflected as the scrubber thumb.
+  const [currentMsgId, setCurrentMsgId] = useState<string | null>(null);
+  // Tray (#36): assistant turns that settled while the window was backgrounded.
+  const [unread, setUnread] = useState(0);
+  // Full-text search (#30): the find bar, its query, and the active match index.
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchIndex, setSearchIndex] = useState(0);
   // The alt picker (#10) and the ref (assistant msg_id) whose alternates it
   // shows. null ref = operate on the latest turn (opened from the palette).
   const [altOpen, setAltOpen] = useState(false);
@@ -92,6 +114,16 @@ export default function App() {
   );
   const hiddenSystemCount = messages.length - visibleMessages.length;
 
+  // Search match ids (#30), in document order, for the active query.
+  const searchMatches = useMemo(
+    () =>
+      searchOpen && searchQuery.trim()
+        ? searchMessages(visibleMessages, searchQuery)
+        : [],
+    [searchOpen, searchQuery, visibleMessages],
+  );
+  const activeSearchId = searchMatches[searchIndex] ?? null;
+
   // Fullscreen image viewer: collects every renderable conversation image so
   // ArrowLeft/Right + wheel can cycle across all of them (#18).
   const gallery = useImageGallery(messages);
@@ -115,6 +147,11 @@ export default function App() {
   );
 
   useAssistantMessageNotifications(lastStreamEnd, characterName);
+
+  // System-wide summon hotkey (#35); the accelerator is read from preferences.
+  useGlobalHotkey();
+
+  const { autoTts } = useUiSettings();
 
   const connected = status?.kind === "connected";
 
@@ -196,7 +233,10 @@ export default function App() {
         !characterOpen &&
         !modelOpen &&
         !settingOpen &&
-        !altOpen
+        !altOpen &&
+        !preferencesOpen &&
+        !tokenOpen &&
+        !searchOpen
       ) {
         e.preventDefault();
         void cancel();
@@ -204,7 +244,7 @@ export default function App() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [streaming, cancel, paletteOpen, memoryOpen, injectSystemOpen, compactOpen, characterOpen, modelOpen, settingOpen, altOpen]);
+  }, [streaming, cancel, paletteOpen, memoryOpen, injectSystemOpen, compactOpen, characterOpen, modelOpen, settingOpen, altOpen, preferencesOpen, tokenOpen, searchOpen]);
 
   // Ctrl/Cmd+K opens the command palette.
   useEffect(() => {
@@ -224,6 +264,28 @@ export default function App() {
     window.addEventListener("shore-gui:open-palette", onSlash);
     return () => window.removeEventListener("shore-gui:open-palette", onSlash);
   }, []);
+
+  // Ctrl/Cmd+F opens the in-app find bar (#30); the "search" palette/menu entry
+  // routes through the same window event.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === "f" || e.key === "F")) {
+        e.preventDefault();
+        setSearchOpen(true);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+  useEffect(() => {
+    const onOpenSearch = () => setSearchOpen(true);
+    window.addEventListener("shore-gui:open-search", onOpenSearch);
+    return () => window.removeEventListener("shore-gui:open-search", onOpenSearch);
+  }, []);
+  // Reset to the first match whenever the query changes.
+  useEffect(() => {
+    setSearchIndex(0);
+  }, [searchQuery]);
 
   // The "memory" palette command opens the dedicated memory search overlay
   // (#15). Closing the palette first avoids two stacked modals.
@@ -411,8 +473,172 @@ export default function App() {
       window.removeEventListener("shore-gui:clear-system", onClearSystem);
   }, [clearSystemBefore]);
 
+  // Open the Preferences (#39) and token/cost (#34) overlays. Both are routed
+  // through window events so the palette and the native menubar share one path.
+  useEffect(() => {
+    const onPrefs = () => {
+      setPaletteOpen(false);
+      setPreferencesOpen(true);
+    };
+    const onTokens = () => {
+      setPaletteOpen(false);
+      setTokenOpen(true);
+    };
+    window.addEventListener("shore-gui:open-preferences", onPrefs);
+    window.addEventListener("shore-gui:open-tokens", onTokens);
+    return () => {
+      window.removeEventListener("shore-gui:open-preferences", onPrefs);
+      window.removeEventListener("shore-gui:open-tokens", onTokens);
+    };
+  }, []);
+
+  // Native menubar (#37) and tray (#36) signals from the backend. Menu items
+  // emit `menu://<id>`; the tray quick-reply emits `tray://quick-reply` (the
+  // backend already shows + focuses the window).
+  useEffect(() => {
+    const unlistens: Array<() => void> = [];
+    let cancelled = false;
+    const add = async (event: string, handler: () => void) => {
+      const un = await listen(event, handler);
+      if (cancelled) un();
+      else unlistens.push(un);
+    };
+    void (async () => {
+      await add("menu://preferences", () => setPreferencesOpen(true));
+      await add("menu://compact", () =>
+        window.dispatchEvent(new Event("shore-gui:open-compact")),
+      );
+      await add("menu://search", () =>
+        window.dispatchEvent(new Event("shore-gui:open-search")),
+      );
+      await add("menu://regen", () => {
+        void regen();
+      });
+      await add("tray://quick-reply", () =>
+        window.dispatchEvent(new Event("shore-gui:focus-composer")),
+      );
+    })();
+    return () => {
+      cancelled = true;
+      unlistens.forEach((u) => u());
+    };
+  }, [regen]);
+
+  // Tray unread count (#36): a settled assistant turn that lands while the
+  // window is backgrounded counts as unread; focus/visibility clears it.
+  useEffect(() => {
+    if (!lastStreamEnd) return;
+    if (typeof document !== "undefined" && document.hidden) {
+      setUnread((u) => u + 1);
+    }
+  }, [lastStreamEnd]);
+  useEffect(() => {
+    const clear = () => setUnread(0);
+    const onVis = () => {
+      if (!document.hidden) setUnread(0);
+    };
+    window.addEventListener("focus", clear);
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      window.removeEventListener("focus", clear);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, []);
+  useEffect(() => {
+    const preview =
+      lastStreamEnd && typeof lastStreamEnd.content === "string"
+        ? lastStreamEnd.content.slice(0, 120)
+        : null;
+    void invoke("set_tray_status", { unread, preview }).catch(() => {
+      // Tray status is best-effort (platform may lack a tray).
+    });
+  }, [unread, lastStreamEnd]);
+
+  // Timeline (#29): track the topmost visible message so the scrubber can show a
+  // position thumb. An IntersectionObserver over the rendered [data-msg-id]
+  // anchors keeps this cheap and layout-driven.
+  useEffect(() => {
+    const root = streamRef.current;
+    if (!root) return;
+    const nodes = root.querySelectorAll<HTMLElement>("[data-msg-id]");
+    if (nodes.length === 0) return;
+    const visible = new Set<string>();
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          const id = (entry.target as HTMLElement).dataset.msgId;
+          if (!id) continue;
+          if (entry.isIntersecting) visible.add(id);
+          else visible.delete(id);
+        }
+        for (const m of visibleMessages) {
+          if (visible.has(m.msg_id)) {
+            setCurrentMsgId(m.msg_id);
+            break;
+          }
+        }
+      },
+      { root, threshold: 0.1 },
+    );
+    nodes.forEach((n) => observer.observe(n));
+    return () => observer.disconnect();
+  }, [visibleMessages]);
+
+  // Auto read-aloud (#38): speak each settled assistant turn when opted in.
+  useEffect(() => {
+    if (!autoTts || !lastStreamEnd) return;
+    const content =
+      typeof lastStreamEnd.content === "string" ? lastStreamEnd.content : "";
+    if (content) speak(content);
+  }, [lastStreamEnd, autoTts]);
+
+  const jumpToMessage = useCallback((msgId: string) => {
+    const el = streamRef.current?.querySelector<HTMLElement>(
+      `[data-msg-id="${CSS.escape(msgId)}"]`,
+    );
+    el?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, []);
+
+  // Search navigation (#30): cycle the active match and scroll it into view.
+  const searchNext = useCallback(() => {
+    setSearchIndex((i) =>
+      searchMatches.length === 0 ? 0 : (i + 1) % searchMatches.length,
+    );
+  }, [searchMatches.length]);
+  const searchPrev = useCallback(() => {
+    setSearchIndex((i) =>
+      searchMatches.length === 0
+        ? 0
+        : (i - 1 + searchMatches.length) % searchMatches.length,
+    );
+  }, [searchMatches.length]);
+  const closeSearch = useCallback(() => {
+    setSearchOpen(false);
+    setSearchQuery("");
+  }, []);
+  useEffect(() => {
+    if (searchOpen && activeSearchId) jumpToMessage(activeSearchId);
+  }, [searchOpen, activeSearchId, jumpToMessage]);
+
   return (
     <>
+      <UiSettingsEffects />
+      <Timeline
+        messages={visibleMessages}
+        currentMsgId={currentMsgId}
+        onJumpTo={jumpToMessage}
+      />
+      {searchOpen && (
+        <SearchBar
+          query={searchQuery}
+          onQueryChange={setSearchQuery}
+          matchCount={searchMatches.length}
+          activeIndex={searchMatches.length > 0 ? searchIndex : -1}
+          onNext={searchNext}
+          onPrev={searchPrev}
+          onClose={closeSearch}
+        />
+      )}
       <SettingsMenu />
       <button
         type="button"
@@ -485,6 +711,11 @@ export default function App() {
                   onAlts={
                     m.role === "assistant" && m.streaming !== true
                       ? showAlternatives
+                      : undefined
+                  }
+                  search={
+                    searchOpen && searchQuery.trim()
+                      ? { query: searchQuery, activeMsgId: activeSearchId }
                       : undefined
                   }
                 />
@@ -609,6 +840,15 @@ export default function App() {
         onClose={gallery.close}
         onNext={gallery.next}
         onPrev={gallery.prev}
+      />
+      <Preferences
+        open={preferencesOpen}
+        onClose={() => setPreferencesOpen(false)}
+      />
+      <TokenDashboard
+        open={tokenOpen}
+        onClose={() => setTokenOpen(false)}
+        messages={messages}
       />
     </>
   );

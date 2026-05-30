@@ -1,4 +1,5 @@
 import type { ViewSettingKey } from "../hooks/useViewSettings.ts";
+import { popOutWindow } from "./windows.ts";
 
 /**
  * The slash-command registry. Mirrors the shore-tui parity command set:
@@ -214,6 +215,36 @@ export function buildCommands(ctx: {
       run: () => {
         window.dispatchEvent(new Event("shore-gui:open-setting"));
       },
+    },
+    {
+      id: "preferences",
+      label: "Preferences",
+      description: "Theme, density, font, motion, shortcuts",
+      keywords: ["settings", "preferences", "prefs", "theme", "appearance", "density", "font", "light", "dark"],
+      // Opens the dedicated Preferences overlay (#39) — the settings home for
+      // the whole app (theming, density, font, motion, speech, privacy, hotkey).
+      run: () => {
+        window.dispatchEvent(new Event("shore-gui:open-preferences"));
+      },
+    },
+    {
+      id: "tokens",
+      label: "Tokens & cost",
+      description: "Usage and cost dashboard",
+      keywords: ["tokens", "cost", "usage", "cache", "dashboard", "spend", "budget"],
+      // Opens the token/cost dashboard overlay (#34): cumulative usage, cache
+      // hit rate, per-turn chart, and cost when the model is priced.
+      run: () => {
+        window.dispatchEvent(new Event("shore-gui:open-tokens"));
+      },
+    },
+    {
+      id: "new-window",
+      label: "New window",
+      description: "Open another window (shared session)",
+      keywords: ["window", "popout", "pop out", "pane", "split", "side by side"],
+      // Pops out a second window that shares the live daemon connection (#31).
+      run: () => void popOutWindow(),
     },
     viewToggle("view-timestamps", "showTimestamps", "Toggle timestamps"),
     viewToggle("view-thinking", "showThinking", "Toggle thinking"),
