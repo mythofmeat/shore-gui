@@ -1,7 +1,18 @@
-import { useState } from "react";
+import { useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { Avatar } from "./Avatar.tsx";
 import { MarkdownBody } from "./MarkdownBody.tsx";
+import { JsonTree } from "./JsonTree.tsx";
+import { MessageContextMenu, type ContextMenuItem } from "./MessageContextMenu.tsx";
+import { LinkPreview, extractUrls } from "./LinkPreview.tsx";
 import { ImageGallery } from "./ImageGallery.tsx";
+import { useUiSettings } from "../hooks/useUiSettings.ts";
+import { speechSupported, speak, cancelSpeech } from "../lib/speech.ts";
+import { MSG_DRAG_MIME } from "../lib/dnd.ts";
+import "../styles/tool-inspector.css";
+import "../styles/speech.css";
+import "../styles/search.css";
+import "../styles/dnd.css";
 import type { CharacterInfo } from "../hooks/useDaemon.ts";
 import {
   formatTimestamp,
@@ -51,6 +62,12 @@ interface MessageProps {
    * assistant turn. Offered on settled assistant turns only.
    */
   onAlts?: (message: DisplayMessage) => void;
+  /**
+   * Active full-text search (#30). When present, message bodies render as
+   * highlighted plain text with the query marked; the message whose id equals
+   * `activeMsgId` gets the emphasized "active match" styling.
+   */
+  search?: { query: string; activeMsgId: string | null };
 }
 
 export function Message({
@@ -62,10 +79,17 @@ export function Message({
   onDelete,
   onRegen,
   onAlts,
+  search,
 }: MessageProps) {
   const time = formatTimestamp(message.timestamp);
   const streaming = message.streaming === true;
   const { showThinking, showImages, showTools, showMetadata } = useViewSettings();
+  const { linkPreviews } = useUiSettings();
+  // Bare URLs to unfurl (#40), only when the user opted in and the turn settled.
+  const links =
+    linkPreviews && message.streaming !== true
+      ? extractUrls(message.content)
+      : [];
   const images = message.images ?? [];
   const renderImages = showImages && images.length > 0;
   const tools = pairTools(message.toolCalls ?? [], message.toolResults ?? []);
@@ -82,13 +106,80 @@ export function Message({
   const canAlts = !streaming && Boolean(onAlts);
   const showActions = canEdit || canDelete || canRegen || canAlts;
 
+  // Right-click context menu (#32). Built once per render; actions are gated by
+  // whichever callbacks the host passes for this message's role.
+  const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null);
+  const onContextMenu = (e: ReactMouseEvent) => {
+    // Defer to the native menu over links / images / code so copy + open-link
+    // still work there.
+    if ((e.target as HTMLElement).closest("a, img, .code-block")) return;
+    e.preventDefault();
+    setMenuPos({ x: e.clientX, y: e.clientY });
+  };
+  const contextItems: ContextMenuItem[] = [
+    {
+      label: "Copy text",
+      onSelect: () => void navigator.clipboard?.writeText(message.content).catch(() => {}),
+    },
+    {
+      label: "Copy message id",
+      onSelect: () => void navigator.clipboard?.writeText(message.msg_id).catch(() => {}),
+    },
+    {
+      label: "Quote into composer",
+      onSelect: () =>
+        window.dispatchEvent(
+          new CustomEvent("shore-gui:quote", { detail: { text: message.content } }),
+        ),
+    },
+  ];
+  if (canEdit) contextItems.push({ label: "Edit", onSelect: () => onEdit?.(message) });
+  if (canRegen) contextItems.push({ label: "Regenerate", onSelect: () => onRegen?.() });
+  if (canAlts) contextItems.push({ label: "Alternatives", onSelect: () => onAlts?.(message) });
+  if (canDelete)
+    contextItems.push({ label: "Delete", danger: true, onSelect: () => onDelete?.(message) });
+  // Drag-out is unreliable from a WebView, so the robust "save image to disk"
+  // path (#33) is a context-menu action backed by the save_image_bytes command.
+  const savableImage = (message.images ?? []).find((im) => im.data);
+  if (savableImage) {
+    contextItems.push({
+      label: "Save image…",
+      onSelect: () =>
+        void invoke("save_image_bytes", {
+          dataBase64: savableImage.data,
+          suggestedName: imageName(savableImage.path),
+        }).catch(() => {}),
+    });
+  }
+  const menuEl =
+    menuPos !== null ? (
+      <MessageContextMenu
+        x={menuPos.x}
+        y={menuPos.y}
+        items={contextItems}
+        onClose={() => setMenuPos(null)}
+      />
+    ) : null;
+
   if (message.role === "user") {
     return (
-      <div className="msg user">
-        <MarkdownBody content={message.content} />
+      <div
+        className="msg user"
+        data-msg-id={message.msg_id}
+        onContextMenu={onContextMenu}
+      >
+        <Body content={message.content} search={search} msgId={message.msg_id} />
         {renderImages && (
           <ImageGallery images={images} onImageClick={onImageClick} />
         )}
+        {links.length > 0 && (
+          <div className="link-cards">
+            {links.map((u) => (
+              <LinkPreview key={u} url={u} />
+            ))}
+          </div>
+        )}
+        {message.content.length > 0 && <DragGrip text={message.content} />}
         {time && <div className="msg-meta">{time}</div>}
         {showActions && (
           <MessageActions
@@ -97,6 +188,7 @@ export function Message({
             align="right"
           />
         )}
+        {menuEl}
       </div>
     );
   }
@@ -105,12 +197,22 @@ export function Message({
     const thinking = message.thinking ?? "";
     const renderThinking = showThinking && thinking.length > 0;
     return (
-      <div className="msg char">
+      <div
+        className="msg char"
+        data-msg-id={message.msg_id}
+        onContextMenu={onContextMenu}
+      >
         <div className="name-line">
           <Avatar character={character} size={18} streaming={streaming} />
           <span className="name">{characterName}</span>
           {showMetadata && streaming && (
             <StreamStatus phase={message.phase} model={message.model} />
+          )}
+          {!streaming && message.content.length > 0 && (
+            <ReadAloudButton text={message.content} />
+          )}
+          {!streaming && message.content.length > 0 && (
+            <DragGrip text={message.content} />
           )}
         </div>
         {renderThinking && (
@@ -118,10 +220,22 @@ export function Message({
         )}
         {renderTools && <ToolActivity tools={tools} />}
         <div className="body">
-          <MarkdownBody content={message.content} streaming={streaming} />
+          <Body
+            content={message.content}
+            streaming={streaming}
+            search={search}
+            msgId={message.msg_id}
+          />
         </div>
         {renderImages && (
           <ImageGallery images={images} onImageClick={onImageClick} />
+        )}
+        {links.length > 0 && (
+          <div className="link-cards">
+            {links.map((u) => (
+              <LinkPreview key={u} url={u} />
+            ))}
+          </div>
         )}
         {!streaming && showMetadata && (
           <MessageMetadata
@@ -139,13 +253,19 @@ export function Message({
             align="left"
           />
         )}
+        {menuEl}
       </div>
     );
   }
 
   return (
-    <div className="msg user" style={{ opacity: 0.6, fontStyle: "italic" }}>
-      <MarkdownBody content={message.content} />
+    <div
+      className="msg user"
+      data-msg-id={message.msg_id}
+      onContextMenu={onContextMenu}
+      style={{ opacity: 0.6, fontStyle: "italic" }}
+    >
+      <Body content={message.content} search={search} msgId={message.msg_id} />
       {renderImages && (
         <ImageGallery images={images} onImageClick={onImageClick} />
       )}
@@ -155,6 +275,7 @@ export function Message({
           align="left"
         />
       )}
+      {menuEl}
     </div>
   );
 }
@@ -474,19 +595,237 @@ function ToolActivity({ tools }: ToolActivityProps) {
 }
 
 function ToolRow({ tool }: { tool: PairedTool }) {
-  const input = truncateInput(tool.input);
   const className = tool.isError ? "tool-call tool-error" : "tool-call";
   const status = tool.pending ? "…" : tool.isError ? "fail" : "ok";
+  // Tool input/output get a collapsible JSON tree (#27) when they parse as
+  // structured data; otherwise we fall back to the quiet truncated text.
+  const inputJson = asJson(tool.input);
+  const outputJson = tool.output !== undefined ? asJson(tool.output) : undefined;
+  const curl = toCurl(tool.input);
+  const inputCopy =
+    inputJson !== undefined
+      ? JSON.stringify(inputJson, null, 2)
+      : tool.input === undefined
+        ? ""
+        : typeof tool.input === "string"
+          ? tool.input
+          : JSON.stringify(tool.input);
+
   return (
     <div className={className}>
       <div className="tool-head">
         <span className="tool-name">{tool.name || "tool"}</span>
         <span className="tool-status">{status}</span>
       </div>
-      {input && <div className="tool-input">{input}</div>}
+      {inputJson !== undefined ? (
+        <JsonTree value={inputJson} />
+      ) : (
+        truncateInput(tool.input) && (
+          <div className="tool-input">{truncateInput(tool.input)}</div>
+        )
+      )}
       {!tool.pending && tool.output !== undefined && tool.output.length > 0 && (
-        <div className="tool-result">{truncateInput(tool.output, 280)}</div>
+        outputJson !== undefined ? (
+          <JsonTree value={outputJson} />
+        ) : (
+          <div className="tool-result">{truncateInput(tool.output, 280)}</div>
+        )
+      )}
+      {(inputCopy || curl) && (
+        <div className="tool-actions">
+          {inputCopy && <CopyButton label="copy json" text={inputCopy} />}
+          {curl && <CopyButton label="copy curl" text={curl} />}
+        </div>
       )}
     </div>
   );
+}
+
+/** A hover-revealed grip for dragging a message into the composer to quote it
+ *  (#33). A dedicated handle keeps the message text selectable. */
+function DragGrip({ text }: { text: string }) {
+  return (
+    <span
+      className="msg-drag-grip"
+      data-drag-handle="true"
+      draggable
+      title="Drag to quote into composer"
+      aria-hidden
+      onDragStart={(e) => {
+        e.dataTransfer.setData(MSG_DRAG_MIME, text);
+        e.dataTransfer.setData("text/plain", text);
+        e.dataTransfer.effectAllowed = "copy";
+      }}
+    >
+      ⠿
+    </span>
+  );
+}
+
+/** Derive a sensible save filename from an image's path. */
+function imageName(path: string): string {
+  const base = path.split(/[\\/]/).pop() || "image.png";
+  return base.includes(".") ? base : `${base}.png`;
+}
+
+/** Render a message body: highlighted plain text while a search is active
+ *  (#30), otherwise the normal markdown. */
+function Body({
+  content,
+  streaming,
+  search,
+  msgId,
+}: {
+  content: string;
+  streaming?: boolean;
+  search?: { query: string; activeMsgId: string | null };
+  msgId: string;
+}) {
+  if (search && search.query.trim()) {
+    return (
+      <HighlightedText
+        text={content}
+        query={search.query}
+        active={search.activeMsgId === msgId}
+      />
+    );
+  }
+  return <MarkdownBody content={content} streaming={streaming} />;
+}
+
+/** Wrap case-insensitive matches of `query` in <mark>, emphasizing the active
+ *  message's hits. Renders plain text (markdown is suspended during search). */
+function HighlightedText({
+  text,
+  query,
+  active,
+}: {
+  text: string;
+  query: string;
+  active: boolean;
+}) {
+  const q = query.trim();
+  const parts: ReactNode[] = [];
+  const lower = text.toLowerCase();
+  const ql = q.toLowerCase();
+  let i = 0;
+  let key = 0;
+  let idx = lower.indexOf(ql);
+  while (idx !== -1) {
+    if (idx > i) parts.push(text.slice(i, idx));
+    parts.push(
+      <mark
+        key={key++}
+        className={active ? "search-hit search-hit-active" : "search-hit"}
+      >
+        {text.slice(idx, idx + q.length)}
+      </mark>,
+    );
+    i = idx + q.length;
+    idx = lower.indexOf(ql, i);
+  }
+  parts.push(text.slice(i));
+  return <div className="markdown search-plain">{parts}</div>;
+}
+
+/** Read-aloud toggle for an assistant message (#38). Hidden when the platform
+ *  has no speech synthesis (e.g. some WebKitGTK builds). */
+function ReadAloudButton({ text }: { text: string }) {
+  const [speaking, setSpeaking] = useState(false);
+  if (!speechSupported()) return null;
+  const toggle = () => {
+    if (speaking) {
+      cancelSpeech();
+      setSpeaking(false);
+    } else {
+      setSpeaking(true);
+      speak(text, () => setSpeaking(false));
+    }
+  };
+  return (
+    <button
+      type="button"
+      className="read-aloud"
+      data-speaking={speaking}
+      onClick={toggle}
+      aria-label={speaking ? "Stop reading" : "Read aloud"}
+      title={speaking ? "Stop reading" : "Read aloud"}
+    >
+      {speaking ? "◼" : "▶"}
+    </button>
+  );
+}
+
+/** A subtle copy-to-clipboard button with a brief "copied" acknowledgement. */
+function CopyButton({ label, text }: { label: string; text: string }) {
+  const [copied, setCopied] = useState(false);
+  const onClick = () => {
+    void navigator.clipboard
+      ?.writeText(text)
+      .then(() => {
+        setCopied(true);
+        window.setTimeout(() => setCopied(false), 1300);
+      })
+      .catch(() => {
+        /* clipboard denied — stay quiet */
+      });
+  };
+  return (
+    <button type="button" className="tool-action" data-copied={copied} onClick={onClick}>
+      {copied ? "copied" : label}
+    </button>
+  );
+}
+
+/** Coerce a tool payload to a JSON value for the tree: pass objects/arrays
+ *  through; parse JSON-looking strings; otherwise undefined (use plain text). */
+function asJson(value: unknown): unknown | undefined {
+  if (value === null || value === undefined) return undefined;
+  if (typeof value === "object") return value;
+  if (typeof value === "string") {
+    const t = value.trim();
+    const looksJson =
+      (t.startsWith("{") && t.endsWith("}")) || (t.startsWith("[") && t.endsWith("]"));
+    if (looksJson) {
+      try {
+        return JSON.parse(t);
+      } catch {
+        return undefined;
+      }
+    }
+  }
+  return undefined;
+}
+
+/** Best-effort "copy as curl": only when the input looks like an HTTP request
+ *  (carries a url + optional method/headers/body). Returns null otherwise. */
+function toCurl(input: unknown): string | null {
+  const obj =
+    input && typeof input === "object"
+      ? (input as Record<string, unknown>)
+      : (() => {
+          const j = asJson(input);
+          return j && typeof j === "object" ? (j as Record<string, unknown>) : null;
+        })();
+  if (!obj) return null;
+  const url = obj.url ?? obj.uri ?? obj.endpoint;
+  if (typeof url !== "string") return null;
+  const method = typeof obj.method === "string" ? obj.method.toUpperCase() : "GET";
+  const parts = [`curl -X ${method} ${shellQuote(url)}`];
+  const headers = obj.headers;
+  if (headers && typeof headers === "object") {
+    for (const [k, v] of Object.entries(headers as Record<string, unknown>)) {
+      parts.push(`-H ${shellQuote(`${k}: ${String(v)}`)}`);
+    }
+  }
+  const body = obj.body ?? obj.data ?? obj.json;
+  if (body !== undefined) {
+    const b = typeof body === "string" ? body : JSON.stringify(body);
+    parts.push(`-d ${shellQuote(b)}`);
+  }
+  return parts.join(" \\\n  ");
+}
+
+function shellQuote(s: string): string {
+  return `'${s.replace(/'/g, `'\\''`)}'`;
 }
