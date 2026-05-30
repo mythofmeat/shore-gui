@@ -1,0 +1,91 @@
+/* ---------- real sampler sliders + scope badges (#28) ---------- */
+
+/* Scope badges: a quiet pill per row showing where the effective value resolves
+   from. The override variant is the loud one — it's the only state the user
+   actively changed this session. */
+.sampler-scope {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--rule);
+  color: var(--ink-mute);
+  white-space: nowrap;
+}
+.sampler-scope-static_default {
+  color: var(--ink-ghost);
+}
+.sampler-scope-character {
+  color: var(--ink-dim);
+  border-color: var(--ink-ghost);
+}
+.sampler-scope-runtime,
+.sampler-scope-override {
+  color: var(--ember);
+  border-color: var(--ember-dim);
+  background: var(--ember-glow);
+}
+
+/* The numeric editor: a range slider stretched alongside a compact spinner. */
+.sampler-editor-number {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+.sampler-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.sampler-slider {
+  flex: 1 1 auto;
+  appearance: none;
+  -webkit-appearance: none;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--rule);
+  outline: none;
+  cursor: pointer;
+}
+.sampler-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--ember);
+  border: none;
+  box-shadow: 0 0 6px var(--ember-glow);
+  cursor: grab;
+}
+.sampler-slider::-webkit-slider-thumb:active {
+  cursor: grabbing;
+}
+.sampler-slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: none;
+  border-radius: 50%;
+  background: var(--ember);
+  box-shadow: 0 0 6px var(--ember-glow);
+  cursor: grab;
+}
+.sampler-slider::-moz-range-track {
+  height: 3px;
+  border-radius: 2px;
+  background: var(--rule);
+}
+.sampler-slider:focus-visible {
+  box-shadow: 0 0 0 2px var(--ember-glow);
+}
+.sampler-editor-number .sampler-input {
+  flex: 0 0 90px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sampler-slider::-webkit-slider-thumb {
+    box-shadow: none;
+  }
+}

@@ -112,13 +112,83 @@ export const SAMPLER_FIELDS: SamplerFieldMeta[] = [
   },
 ];
 
+/**
+ * The three logical scopes a value can resolve from, normalized from whatever
+ * label the daemon hands back (its scope strings aren't compile-checkable —
+ * see caveats). `runtime` means an explicit per-session override is in effect;
+ * `character` means the active character supplies it; `static_default` is the
+ * config/provider baseline.
+ */
+export type SamplerScope = "static_default" | "character" | "runtime";
+
 /** A single field resolved from the snapshot, ready to render. */
 export interface SamplerField {
   meta: SamplerFieldMeta;
   /** The current effective value (raw), or null if unset. */
   value: unknown;
-  /** Where the value comes from (e.g. "config", "default", "session"). */
+  /** The raw scope/source label as reported (kept for the tooltip). */
   scope: string | null;
+  /** The normalized scope, or null when the label is unrecognized/absent. */
+  resolvedScope: SamplerScope | null;
+  /** Whether a runtime override is in effect (drives the "overridden" style). */
+  overridden: boolean;
+}
+
+/** Human-facing labels for the normalized scopes (badge text). */
+export const SAMPLER_SCOPE_LABELS: Record<SamplerScope, string> = {
+  static_default: "default",
+  character: "character",
+  runtime: "override",
+};
+
+/**
+ * Normalizes a raw scope/source label into one of the three logical scopes.
+ * Tolerant of the several names shore-tui / the daemon might use; returns null
+ * when nothing matches so the caller can fall back gracefully.
+ */
+export function classifySamplerScope(scope: string | null): SamplerScope | null {
+  if (!scope) return null;
+  const s = scope.trim().toLowerCase();
+  if (!s) return null;
+  if (
+    /(runtime|session|override|overridden|user|live|manual|set)/.test(s)
+  ) {
+    return "runtime";
+  }
+  if (/(character|persona|card|char)/.test(s)) return "character";
+  if (
+    /(default|static|config|provider|base|builtin|built-in|fallback)/.test(s)
+  ) {
+    return "static_default";
+  }
+  return null;
+}
+
+/** Coarse fallback slider bounds for numeric keys whose meta omits a max. */
+const SLIDER_FALLBACK_MAX: Partial<Record<SamplerKey, number>> = {
+  temperature: 2,
+  top_p: 1,
+  budget_tokens: 32_000,
+  max_output_tokens: 16_000,
+  cache_ttl: 3_600,
+};
+
+/**
+ * Resolves the min/max/step a range slider should use for a numeric field,
+ * filling in sane fallbacks where `meta` leaves a bound open. The numeric
+ * spinner still honors the looser `meta` bounds during coercion; the slider
+ * just needs a finite track.
+ */
+export function sliderBoundsFor(meta: SamplerFieldMeta): {
+  min: number;
+  max: number;
+  step: number;
+} {
+  const min = meta.min ?? 0;
+  const max = meta.max ?? SLIDER_FALLBACK_MAX[meta.key] ?? min + 1;
+  const step =
+    meta.step ?? (max - min <= 2 ? 0.01 : Math.max(1, Math.round((max - min) / 100)));
+  return { min, max: Math.max(max, min + step), step };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -156,14 +226,41 @@ export function parseSamplerSnapshot(data: unknown): SamplerField[] {
   return SAMPLER_FIELDS.map((meta) => {
     const raw = source ? source[meta.key] : undefined;
     if (isRecord(raw)) {
+      const scope = firstString(raw, ["scope", "source", "origin", "from"]);
+      const resolvedScope = classifySamplerScope(scope);
+      // Prefer an explicit override flag if the daemon supplies one; otherwise
+      // infer it from the normalized scope being "runtime". Stay tolerant.
+      const overridden = readBoolean(
+        raw,
+        ["overridden", "is_override", "is_overridden", "override"],
+      ) ?? resolvedScope === "runtime";
       return {
         meta,
         value: firstDefined(raw, ["value", "current", "effective", "val"]) ?? null,
-        scope: firstString(raw, ["scope", "source", "origin", "from"]),
+        scope,
+        resolvedScope,
+        overridden,
       };
     }
-    return { meta, value: raw ?? null, scope: null };
+    return {
+      meta,
+      value: raw ?? null,
+      scope: null,
+      resolvedScope: null,
+      overridden: false,
+    };
   });
+}
+
+function readBoolean(
+  record: Record<string, unknown>,
+  keys: string[],
+): boolean | null {
+  for (const key of keys) {
+    const v = record[key];
+    if (typeof v === "boolean") return v;
+  }
+  return null;
 }
 
 function unwrapSnapshot(data: unknown): Record<string, unknown> | null {

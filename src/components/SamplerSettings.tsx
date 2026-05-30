@@ -4,12 +4,15 @@ import { useCommandResult } from "../hooks/useCommandResult.ts";
 import { DAEMON_COMMANDS } from "../lib/commands.ts";
 import {
   SAMPLER_RESET_VALUE,
+  SAMPLER_SCOPE_LABELS,
   coerceSamplerInput,
   editStringFor,
   formatSamplerValue,
   parseSamplerSnapshot,
+  sliderBoundsFor,
   type SamplerField,
 } from "../lib/sampler.ts";
+import "../styles/sampler-sliders.css";
 
 interface SamplerSettingsProps {
   open: boolean;
@@ -180,9 +183,18 @@ export function SamplerSettings({
                         {formatSamplerValue(field.value)}
                       </span>
                     )}
-                    {field.scope && !isEditing ? (
-                      <span className="sampler-scope" title="Value source">
-                        {field.scope}
+                    {!isEditing && (field.resolvedScope || field.scope) ? (
+                      <span
+                        className={`sampler-scope sampler-scope-${
+                          field.resolvedScope ?? "unknown"
+                        }${field.overridden ? " sampler-scope-override" : ""}`}
+                        title={
+                          field.scope ? `Value source: ${field.scope}` : "Value source"
+                        }
+                      >
+                        {field.resolvedScope
+                          ? SAMPLER_SCOPE_LABELS[field.resolvedScope]
+                          : field.scope}
                       </span>
                     ) : null}
                     {!isEditing && (
@@ -319,28 +331,44 @@ function SamplerEditor({
     );
   }
 
-  // number
+  // number — a continuous slider paired with a precise numeric spinner. The
+  // slider track uses sane fallback bounds (sliderBoundsFor) where meta leaves
+  // a bound open; the spinner still honors meta's looser bounds during commit.
+  const bounds = sliderBoundsFor(meta);
+  const sliderValue = Number.isFinite(Number(draft)) ? Number(draft) : bounds.min;
   return (
-    <div className="sampler-editor">
-      <input
-        className="sampler-input"
-        type="number"
-        inputMode="decimal"
-        value={draft}
-        autoFocus
-        min={meta.min}
-        max={meta.max}
-        step={meta.step}
-        onChange={(e) => onDraftChange(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            onCommit(draft);
-          }
-        }}
-        autoComplete="off"
-        spellCheck={false}
-      />
+    <div className="sampler-editor sampler-editor-number">
+      <div className="sampler-slider-row">
+        <input
+          type="range"
+          className="sampler-slider"
+          min={bounds.min}
+          max={bounds.max}
+          step={bounds.step}
+          value={Math.min(bounds.max, Math.max(bounds.min, sliderValue))}
+          onChange={(e) => onDraftChange(e.target.value)}
+          aria-label={`${meta.label} slider`}
+        />
+        <input
+          className="sampler-input"
+          type="number"
+          inputMode="decimal"
+          value={draft}
+          autoFocus
+          min={meta.min}
+          max={meta.max}
+          step={meta.step}
+          onChange={(e) => onDraftChange(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              onCommit(draft);
+            }
+          }}
+          autoComplete="off"
+          spellCheck={false}
+        />
+      </div>
       <div className="sampler-editor-actions">
         <button
           type="button"
