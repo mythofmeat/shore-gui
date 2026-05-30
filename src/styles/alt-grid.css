@@ -1,0 +1,116 @@
+/* ---------- side-by-side alt picker grid (#25) ---------- */
+/*
+ * Promotes the 1D alternate cycler into an at-a-glance comparison grid. Cards
+ * render full markdown bodies (scrollable) so alternates can be read side by
+ * side; the focused card carries an ember rail and the committed one a badge.
+ */
+
+.alt-picker-grid {
+  /* Wider than the default palette — comparison wants horizontal room. */
+  max-width: min(960px, 92vw);
+  width: 92vw;
+}
+
+.alt-header {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.alt-count {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-mute);
+}
+
+.alt-grid-results {
+  margin-top: 10px;
+}
+
+.alt-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+  max-height: 64vh;
+  overflow-y: auto;
+  padding: 2px;
+}
+
+.alt-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: var(--bg-elev);
+  cursor: pointer;
+  /* The ember rail lives in the left border; reserve it so text doesn't shift
+     when a card becomes active. */
+  border-left: 2px solid var(--rule);
+  transition: border-color 120ms ease, transform 120ms ease;
+}
+.alt-card:hover {
+  border-color: var(--ink-ghost);
+}
+.alt-card-active {
+  border-left-color: var(--ember);
+  border-color: var(--ember-dim);
+}
+.alt-card-current {
+  background: color-mix(in srgb, var(--ember-glow) 40%, var(--bg-elev));
+}
+
+.alt-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.alt-card-index {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-mute);
+}
+.alt-card .alt-card-current {
+  /* the inline "current" badge (distinct from the card-background modifier) */
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ember);
+  padding: 1px 6px;
+  border: 1px solid var(--ember-dim);
+  border-radius: 999px;
+}
+
+.alt-card-body {
+  max-height: 260px;
+  overflow-y: auto;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--ink-char);
+}
+.alt-card-body .markdown :first-child {
+  margin-top: 0;
+}
+.alt-card-body .markdown :last-child {
+  margin-bottom: 0;
+}
+.alt-card-empty {
+  color: var(--ink-ghost);
+  font-style: italic;
+}
+
+.alt-grid-foot {
+  margin-top: 10px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--ink-ghost);
+  text-align: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .alt-card {
+    transition: none;
+  }
+}
