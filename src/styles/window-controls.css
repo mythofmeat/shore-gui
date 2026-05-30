@@ -1,0 +1,39 @@
+/* Multi-pane / pop-out windows (#31). A quiet, hover-revealed titlebar button
+ * an integrator may render to open another window. Themed via the shared CSS
+ * custom properties so it follows the ember palette automatically. */
+
+.window-new {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-ghost);
+  cursor: pointer;
+  transition: color 120ms ease, background-color 120ms ease;
+}
+
+.window-new:hover,
+.window-new:focus-visible {
+  color: var(--ember);
+  background: var(--bg-elev);
+}
+
+.window-new:focus-visible {
+  outline: 1px solid var(--ember-dim);
+  outline-offset: 1px;
+}
+
+.window-new svg {
+  display: block;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .window-new {
+    transition: none;
+  }
+}
