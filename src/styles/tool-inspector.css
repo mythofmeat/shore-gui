@@ -1,0 +1,129 @@
+/* ---------- tool-call JSON inspector (#27) ---------- */
+/*
+ * Replaces the raw wrapped-text tool input/output with a collapsible JSON tree.
+ * Keeps the quiet, mono, ember/ink palette of the surrounding .tool-call block;
+ * carets and per-call actions stay subtle and hover-revealed.
+ */
+
+.json-tree {
+  margin-top: 4px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--ink-mute);
+  overflow-x: auto;
+}
+
+.json-row {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.4ch;
+  white-space: pre;
+}
+
+/* A toggle row reuses .json-row layout but is an actual button. */
+button.json-toggle {
+  width: 100%;
+  margin: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  outline: none;
+}
+button.json-toggle:hover {
+  color: var(--ink);
+}
+button.json-toggle:focus-visible {
+  outline: 2px solid var(--ember);
+  outline-offset: 1px;
+  border-radius: 2px;
+}
+
+.json-caret {
+  display: inline-block;
+  width: 1ch;
+  color: var(--ink-ghost);
+  transition: transform 120ms ease;
+}
+.json-caret-open {
+  transform: rotate(90deg);
+}
+
+.json-key {
+  color: var(--ember-dim);
+}
+.json-index {
+  color: var(--ink-ghost);
+}
+.json-punct {
+  color: var(--ink-ghost);
+}
+.json-collapsed {
+  color: var(--ink-ghost);
+  font-style: italic;
+}
+
+.json-string {
+  color: var(--ink);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.json-number {
+  color: var(--ember);
+}
+.json-boolean {
+  color: var(--ember);
+}
+.json-null {
+  color: var(--ink-ghost);
+  font-style: italic;
+}
+
+/* ---------- per-call affordances (copy / curl) ---------- */
+.tool-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 6px;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.tool-call:hover .tool-actions,
+.tool-call:focus-within .tool-actions {
+  opacity: 1;
+}
+.tool-action {
+  border: 0;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-ghost);
+  transition: color 120ms ease;
+}
+.tool-action:hover {
+  color: var(--ember);
+}
+.tool-action:focus-visible {
+  outline: 2px solid var(--ember);
+  outline-offset: 2px;
+  border-radius: 2px;
+  color: var(--ink);
+}
+.tool-action[data-copied="true"] {
+  color: var(--ember);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .json-caret,
+  .tool-actions,
+  .tool-action {
+    transition: none;
+  }
+}
