@@ -1,0 +1,101 @@
+/* ---------- link previews / URL unfurl cards (#40) ---------- */
+
+.link-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.link-card {
+  position: relative;
+  display: flex;
+  gap: 12px;
+  align-items: stretch;
+  max-width: 460px;
+  padding: 10px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: var(--bg-elev);
+  text-decoration: none;
+  color: inherit;
+  overflow: hidden;
+  transition: border-color 120ms ease;
+}
+.link-card:hover {
+  border-color: var(--ink-ghost);
+}
+
+.link-card-thumb {
+  flex: 0 0 84px;
+  width: 84px;
+  height: 84px;
+  object-fit: cover;
+  border-radius: 5px;
+  background: var(--bg);
+}
+
+.link-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  padding-right: 14px;
+}
+.link-card-site {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+.link-card-title {
+  font-family: var(--font-char);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  line-height: 1.3;
+  /* clamp to two lines */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.link-card-desc {
+  font-size: 12.5px;
+  color: var(--ink-dim);
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.link-card-hide {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 18px;
+  height: 18px;
+  line-height: 1;
+  border: none;
+  border-radius: 50%;
+  background: var(--bg);
+  color: var(--ink-mute);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 120ms ease, color 120ms ease;
+}
+.link-card:hover .link-card-hide {
+  opacity: 0.85;
+}
+.link-card-hide:hover {
+  color: var(--ember);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .link-card,
+  .link-card-hide {
+    transition: none;
+  }
+}

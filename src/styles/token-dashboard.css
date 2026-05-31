@@ -1,0 +1,90 @@
+/* ---------- token / cost dashboard (#34) ---------- */
+
+.token-dashboard {
+  max-width: 560px;
+}
+
+.td-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 12px 0 18px;
+}
+
+.td-card {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--bg-elev);
+}
+.td-card-accent {
+  border-color: var(--ember-dim);
+}
+.td-card-value {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  color: var(--ink);
+  line-height: 1.1;
+}
+.td-card-accent .td-card-value {
+  color: var(--ember);
+}
+.td-card-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+
+.td-chart-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  margin-bottom: 6px;
+}
+.td-chart-scale {
+  color: var(--ink-ghost);
+}
+
+.td-chart {
+  width: 100%;
+  height: 132px;
+  display: block;
+  overflow: visible;
+}
+.td-axis {
+  stroke: var(--rule);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.td-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 10px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--ink-mute);
+}
+.td-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.td-swatch {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  display: inline-block;
+}

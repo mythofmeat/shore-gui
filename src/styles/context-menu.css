@@ -1,0 +1,62 @@
+/* ---------- right-click context menus (#32) ---------- */
+
+.context-menu {
+  position: fixed;
+  z-index: 2000;
+  min-width: 168px;
+  padding: 5px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: var(--bg-elev);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.42);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  animation: context-menu-in 90ms ease;
+}
+@keyframes context-menu-in {
+  from { opacity: 0; transform: translateY(-3px); }
+  to { opacity: 1; transform: none; }
+}
+
+.context-menu-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 6px 10px;
+  border: none;
+  border-radius: 5px;
+  background: none;
+  text-align: left;
+  font-family: var(--font-user);
+  font-size: 13px;
+  color: var(--ink-dim);
+  cursor: pointer;
+  transition: background 90ms ease, color 90ms ease;
+}
+.context-menu-item:hover,
+.context-menu-item:focus-visible {
+  outline: none;
+  background: var(--bg);
+  color: var(--ink);
+}
+.context-menu-item-danger {
+  color: var(--ember-dim);
+}
+.context-menu-item-danger:hover,
+.context-menu-item-danger:focus-visible {
+  background: var(--ember-glow);
+  color: var(--ember);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .context-menu {
+    animation: none;
+  }
+  .context-menu-item {
+    transition: none;
+  }
+}
+:root[data-reduced-motion="on"] .context-menu {
+  animation: none;
+}

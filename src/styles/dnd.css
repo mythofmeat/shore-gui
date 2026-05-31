@@ -1,0 +1,66 @@
+/* ---------- drag and drop (#33) ---------- */
+
+/* Composer drop target highlight while dragging an image file or a message. */
+.composer.composer-drop .input-wrap {
+  outline: 1.5px dashed var(--ember);
+  outline-offset: 3px;
+  border-radius: 8px;
+}
+.composer-drop-hint {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  font-family: var(--font-user);
+  font-style: italic;
+  color: var(--ember);
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+  border-radius: 8px;
+  z-index: 5;
+}
+
+/* A draggable message body gives a subtle grab affordance on hover. */
+.msg [data-drag-handle="true"] {
+  cursor: grab;
+}
+.msg [data-drag-handle="true"]:active {
+  cursor: grabbing;
+}
+
+/* Hover-revealed drag grip for quoting a message into the composer. */
+.msg-drag-grip {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1;
+  color: var(--ink-ghost);
+  opacity: 0;
+  transition: opacity 120ms ease, color 120ms ease;
+  user-select: none;
+}
+.msg.char .name-line .msg-drag-grip {
+  margin-left: 2px;
+}
+.msg.user .msg-drag-grip {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}
+.msg.user {
+  position: relative;
+}
+.msg:hover .msg-drag-grip {
+  opacity: 0.6;
+}
+.msg-drag-grip:hover {
+  opacity: 1;
+  color: var(--ember);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .msg-drag-grip {
+    transition: none;
+  }
+}

@@ -29,6 +29,16 @@ export type ConnectionStatus =
     }
   | { kind: "disconnected"; reason: string };
 
+/**
+ * A base64-encoded image attachment (#17). Mirrors shore_protocol's
+ * ImageUpload; forwarded into ClientMessageBody.image_data by send_message.
+ */
+export interface ImageUpload {
+  filename: string;
+  /** Base64-encoded image bytes (no data: URI prefix). */
+  data: string;
+}
+
 export interface CharacterInfo {
   name: string;
   avatar?: {
@@ -84,7 +94,18 @@ interface DaemonState {
   notices: ProtocolNotice[];
   commandResults: CommandResult[];
   pendingCommands: Record<string, PendingCommand>;
+  // History pagination (#19). Whether older turns can still be loaded, and the
+  // cursor to pass to command("history_page", { before }). The daemon's `before`
+  // is "active" (page back from the active-context boundary) or a numeric index;
+  // it returns next_before/has_more_before, which drive this cursor. null cursor
+  // => send "active" for the first page back (see HISTORY_PAGE_COMMAND).
+  historyHasMoreBefore: boolean;
+  historyNextBefore: number | null;
 }
+
+// Daemon command name for paging older history. Centralized so it is easy to
+// retune; NOT compile-checkable against the live daemon (see caveats).
+const HISTORY_PAGE_COMMAND = "history_page";
 
 export interface DaemonHandle {
   status: ConnectionStatus | null;
@@ -97,11 +118,17 @@ export interface DaemonHandle {
   lastAddr: string;
   streaming: boolean;
   lastStreamEnd: ServerMessageEvent | null;
+  // History pagination (#19): whether older turns remain, and a dispatcher that
+  // requests the next older page (no-op when nothing more / already loading).
+  historyHasMoreBefore: boolean;
+  historyNextBefore: number | null;
+  loadMoreHistory: () => Promise<string | null>;
   connect: (addr?: string, character?: string) => Promise<void>;
   disconnect: () => Promise<void>;
   cancel: () => Promise<void>;
   quit: () => Promise<void>;
-  send: (text: string) => Promise<void>;
+  send: (text: string, images?: ImageUpload[]) => Promise<void>;
+  regen: (guidance?: string) => Promise<string>;
   command: (name: string, args?: Record<string, unknown>) => Promise<string>;
 }
 
@@ -122,6 +149,8 @@ const initialState: DaemonState = {
   notices: [],
   commandResults: [],
   pendingCommands: {},
+  historyHasMoreBefore: false,
+  historyNextBefore: null,
 };
 
 function readStoredAddr(): string {
@@ -190,9 +219,32 @@ export function useDaemon(): DaemonHandle {
     await invoke("quit");
   }, []);
 
-  const send = useCallback(async (text: string) => {
-    await invoke<string>("send_message", { text });
+  const send = useCallback(async (text: string, images?: ImageUpload[]) => {
+    await invoke<string>("send_message", {
+      text,
+      imageData: images && images.length > 0 ? images : null,
+    });
   }, []);
+
+  const regen = useCallback(async (guidance?: string) => {
+    const trimmed = guidance?.trim();
+    return await invoke<string>("regen", {
+      guidance: trimmed && trimmed.length > 0 ? trimmed : null,
+    });
+  }, []);
+
+  // Live view of pagination state for the stable loadMoreHistory callback,
+  // and a guard so overlapping top-hits don't fire duplicate page requests.
+  const paginationRef = useRef({ hasMore: false, nextBefore: null as number | null });
+  paginationRef.current = {
+    hasMore: state.historyHasMoreBefore,
+    nextBefore: state.historyNextBefore,
+  };
+  const loadingHistoryRef = useRef(false);
+  // Clear the in-flight guard once a result (the prepended page) lands.
+  useEffect(() => {
+    loadingHistoryRef.current = false;
+  }, [state.history, state.historyNextBefore]);
 
   const command = useCallback(async (name: string, args: Record<string, unknown> = {}) => {
     const rid = makeRid("cmd");
@@ -210,6 +262,24 @@ export function useDaemon(): DaemonHandle {
     }
   }, []);
 
+  const loadMoreHistory = useCallback(async (): Promise<string | null> => {
+    const { hasMore, nextBefore } = paginationRef.current;
+    if (!hasMore || loadingHistoryRef.current) return null;
+    loadingHistoryRef.current = true;
+    try {
+      // The daemon's `before` cursor is the numeric index returned as
+      // `next_before` by the previous page, or the literal "active" to page
+      // back from the active-context boundary on the first request.
+      const args: Record<string, unknown> = {
+        before: nextBefore ?? "active",
+      };
+      return await command(HISTORY_PAGE_COMMAND, args);
+    } catch {
+      loadingHistoryRef.current = false;
+      return null;
+    }
+  }, [command]);
+
   const messages = useMemo(
     () => toDisplayMessages(state.history, state.activeStream),
     [state.history, state.activeStream],
@@ -226,11 +296,15 @@ export function useDaemon(): DaemonHandle {
     lastAddr: readStoredAddr(),
     streaming: state.activeStream !== null,
     lastStreamEnd: state.lastStreamEnd,
+    historyHasMoreBefore: state.historyHasMoreBefore,
+    historyNextBefore: state.historyNextBefore,
+    loadMoreHistory,
     connect,
     disconnect,
     cancel,
     quit,
     send,
+    regen,
     command,
   };
 }
@@ -305,14 +379,23 @@ function reduceConnection(state: DaemonState, status: ConnectionStatus): DaemonS
     };
   }
 
+  const history = coerceHistoryMessages(status.history);
   return {
     ...state,
     status,
-    history: coerceHistoryMessages(status.history),
+    history,
     activeStart: status.active_start,
     revision: 0,
     activeStream: null,
     lastStreamEnd: null,
+    historyHasMoreBefore: deriveHasMoreBefore(
+      status as unknown as ServerMessageEvent,
+      history,
+    ),
+    historyNextBefore: deriveNextBefore(
+      status as unknown as ServerMessageEvent,
+      history,
+    ),
   };
 }
 
@@ -388,15 +471,18 @@ function reduceHistoryFrame(state: DaemonState, frame: ServerMessageEvent): Daem
   if (isStaleRevision(state, revision)) return state;
 
   const status = mergeHistoryIntoStatus(state.status, frame);
+  const history = coerceHistoryMessages(frame.messages);
   return {
     ...state,
     status,
-    history: coerceHistoryMessages(frame.messages),
+    history,
     activeStart: numericValue(frame.active_start) ?? 0,
     revision: Math.max(state.revision, revision ?? state.revision),
     activeStream: requestMatches(state.activeStream, stringValue(frame.rid))
       ? null
       : state.activeStream,
+    historyHasMoreBefore: deriveHasMoreBefore(frame, history),
+    historyNextBefore: deriveNextBefore(frame, history),
   };
 }
 
@@ -547,10 +633,46 @@ function reduceCommandOutputFrame(state: DaemonState, frame: ServerMessageEvent)
     createdAt: new Date().toISOString(),
   };
 
-  return {
+  const base: DaemonState = {
     ...state,
     pendingCommands: withoutPendingCommand(state.pendingCommands, rid),
     commandResults: appendBounded(state.commandResults, result, MAX_COMMAND_RESULTS),
+  };
+
+  // History pagination (#19): a history_page result carries an older page of
+  // messages. PREPEND only the ones we don't already hold (dedupe by msg_id),
+  // and advance the cursor. App.tsx restores the scroll offset after the
+  // prepend in a useLayoutEffect so the viewport does not jump.
+  if (name === HISTORY_PAGE_COMMAND) {
+    return reduceHistoryPageResult(base, frame.data);
+  }
+
+  return base;
+}
+
+function reduceHistoryPageResult(state: DaemonState, data: unknown): DaemonState {
+  const older = extractHistoryPageMessages(data);
+  const known = new Set(state.history.map((m) => m.msg_id));
+  const fresh = older.filter((m) => !known.has(m.msg_id));
+
+  const hasMore = extractHistoryPageHasMore(data, older);
+  // The daemon returns the next cursor as a numeric index (`next_before`, or
+  // `cursor`). Keep the prior cursor if the payload omits it.
+  const nextBefore = extractHistoryPageCursor(data) ?? state.historyNextBefore;
+
+  if (fresh.length === 0) {
+    return {
+      ...state,
+      historyHasMoreBefore: hasMore,
+      historyNextBefore: nextBefore,
+    };
+  }
+
+  return {
+    ...state,
+    history: [...fresh, ...state.history],
+    historyHasMoreBefore: hasMore,
+    historyNextBefore: nextBefore,
   };
 }
 
@@ -713,6 +835,87 @@ function withoutPendingCommand(
   const next = { ...pending };
   delete next[rid];
   return next;
+}
+
+// --- History pagination helpers (#19) -------------------------------------
+//
+// The exact cursor/flag field names are daemon-defined and not verifiable in
+// this repo (see caveats). We accept a few likely shapes and otherwise derive
+// conservatively: if a frame doesn't advertise more history, we assume none.
+
+function deriveHasMoreBefore(
+  frame: ServerMessageEvent,
+  history: HistoryMessage[],
+): boolean {
+  const flag = readHasMoreFlag(frame);
+  if (flag !== null) return flag;
+  // No explicit signal: only offer paging when there is at least one message
+  // (so a cursor exists). Conservative — a daemon without paging support will
+  // simply return an empty page and we stop (handled in the result reducer).
+  return history.length > 0;
+}
+
+function deriveNextBefore(
+  frame: ServerMessageEvent,
+  history: HistoryMessage[],
+): number | null {
+  void history;
+  // The cursor is a numeric index. Connect/history snapshots don't advertise
+  // one (only history_page command_output does), so this is usually null —
+  // and a null cursor means "page back from the active boundary" ("active").
+  return extractHistoryPageCursor(frame);
+}
+
+function readHasMoreFlag(frame: ServerMessageEvent): boolean | null {
+  for (const key of [
+    "has_more_before",
+    "history_has_more_before",
+    "has_more",
+    "more",
+  ]) {
+    const value = frame[key];
+    if (typeof value === "boolean") return value;
+  }
+  return null;
+}
+
+// A history_page command_output carries the older page. Accept either a bare
+// array of messages, or an object with a messages/history/page array.
+function extractHistoryPageMessages(data: unknown): HistoryMessage[] {
+  if (Array.isArray(data)) return coerceHistoryMessages(data);
+  if (isRecord(data)) {
+    for (const key of ["messages", "history", "page", "items"]) {
+      if (Array.isArray(data[key])) return coerceHistoryMessages(data[key]);
+    }
+  }
+  return [];
+}
+
+// The daemon returns the next cursor as a numeric index under `next_before`
+// (alias `cursor`). Tolerant of a few key names; ignores non-numeric values.
+function extractHistoryPageCursor(data: unknown): number | null {
+  if (!isRecord(data)) return null;
+  for (const key of ["next_before", "cursor", "history_next_before", "before_cursor"]) {
+    const value = data[key];
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+  }
+  return null;
+}
+
+function extractHistoryPageHasMore(
+  data: unknown,
+  page: HistoryMessage[],
+): boolean {
+  if (isRecord(data)) {
+    const flag = readHasMoreFlag(data as ServerMessageEvent);
+    if (flag !== null) return flag;
+  }
+  // No explicit flag: if the page came back empty, there is nothing older.
+  return page.length > 0;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }
 
 function isStaleRevision(state: DaemonState, revision: number | null): boolean {
