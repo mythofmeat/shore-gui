@@ -82,8 +82,6 @@ export default function App() {
   // GUI-native overlays: Preferences (#39) and the token/cost dashboard (#34).
   const [preferencesOpen, setPreferencesOpen] = useState(false);
   const [tokenOpen, setTokenOpen] = useState(false);
-  // Timeline (#29): the topmost visible message, reflected as the scrubber thumb.
-  const [currentMsgId, setCurrentMsgId] = useState<string | null>(null);
   // Tray (#36): assistant turns that settled while the window was backgrounded.
   const [unread, setUnread] = useState(0);
   // Full-text search (#30): the find bar, its query, and the active match index.
@@ -554,35 +552,6 @@ export default function App() {
     });
   }, [unread, lastStreamEnd]);
 
-  // Timeline (#29): track the topmost visible message so the scrubber can show a
-  // position thumb. An IntersectionObserver over the rendered [data-msg-id]
-  // anchors keeps this cheap and layout-driven.
-  useEffect(() => {
-    const root = streamRef.current;
-    if (!root) return;
-    const nodes = root.querySelectorAll<HTMLElement>("[data-msg-id]");
-    if (nodes.length === 0) return;
-    const visible = new Set<string>();
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          const id = (entry.target as HTMLElement).dataset.msgId;
-          if (!id) continue;
-          if (entry.isIntersecting) visible.add(id);
-          else visible.delete(id);
-        }
-        for (const m of visibleMessages) {
-          if (visible.has(m.msg_id)) {
-            setCurrentMsgId(m.msg_id);
-            break;
-          }
-        }
-      },
-      { root, threshold: 0.1 },
-    );
-    nodes.forEach((n) => observer.observe(n));
-    return () => observer.disconnect();
-  }, [visibleMessages]);
 
   // Auto read-aloud (#38): speak each settled assistant turn when opted in.
   useEffect(() => {
@@ -623,11 +592,7 @@ export default function App() {
   return (
     <>
       <UiSettingsEffects />
-      <Timeline
-        messages={visibleMessages}
-        currentMsgId={currentMsgId}
-        onJumpTo={jumpToMessage}
-      />
+      <Timeline messages={visibleMessages} scrollerRef={streamRef} />
       {searchOpen && (
         <SearchBar
           query={searchQuery}

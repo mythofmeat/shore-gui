@@ -1,26 +1,27 @@
 /* ---------- conversation timeline / scrubber (#29) ---------- */
 /*
- * A slim rail pinned to the right margin of the stream. At rest it's a quiet
- * hairline of ticks whose weight reads as message density; on hover it widens
- * and reveals time-gap labels and the span. Meant to feel like a literary
- * margin, not a scrollbar gadget.
+ * A slim rail pinned to the right margin of the stream. At rest it is a quiet
+ * hairline track with a reading-progress fill, faint time-gap notches and a
+ * position thumb. On hover it widens to reveal a tick per turn, the time-gap
+ * labels and the overall span. Meant to read as a literary margin, not a
+ * scrollbar gadget. Clicking/arrowing the rail scrubs the stream.
  */
 
 .timeline {
   position: fixed;
-  top: 96px;
-  bottom: 120px;
-  right: 10px;
-  width: 14px;
+  top: 88px;
+  bottom: 104px;
+  right: 0;
+  width: 24px;
   z-index: 30;
   display: flex;
   justify-content: flex-end;
-  /* Don't eat clicks on the empty track — only the ticks/labels are targets. */
+  /* Only the rail is a target; the surrounding strip stays click-through. */
   pointer-events: none;
   transition: width 160ms ease;
 }
 .timeline-open {
-  width: 168px;
+  width: 192px;
 }
 
 .timeline-rail {
@@ -28,46 +29,71 @@
   width: 100%;
   height: 100%;
   pointer-events: auto;
-}
-
-/* A density tick. Anchored to the right edge; heat is applied inline as opacity
-   + horizontal scale so a dense passage reads heavier. */
-.timeline-tick {
-  position: absolute;
-  right: 0;
-  width: 11px;
-  min-height: 2px;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  border-radius: 2px 0 0 2px;
-  background: var(--ember);
-  transform-origin: right center;
   cursor: pointer;
-  pointer-events: auto;
-  transition: opacity 120ms ease, filter 120ms ease;
 }
-.timeline-tick:hover {
-  filter: brightness(1.25);
-  opacity: 1 !important;
+.timeline-rail:focus-visible {
+  outline: 2px solid var(--ember);
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 
-/* A folded/compacted span: a faint hatched seam rather than a solid tick. */
-.timeline-fold {
+/* The baseline track: a single continuous hairline so the rail never reads as
+   detached marks. Right-anchored; everything else aligns to it. */
+.timeline-track {
   position: absolute;
-  right: 0;
-  width: 11px;
-  border-radius: 2px 0 0 2px;
-  background: repeating-linear-gradient(
-    -45deg,
-    var(--ink-ghost) 0 2px,
-    transparent 2px 4px
-  );
-  opacity: 0.5;
+  right: 11px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--rule);
+  opacity: 0.6;
+  transition: opacity 160ms ease;
+}
+.timeline-open .timeline-track {
+  opacity: 0.9;
 }
 
-/* Time-gap marker: a hairline across the rail; its italic label only shows when
-   the rail is hovered/open. */
+/* Reading progress: the track faintly filled from the top down to the current
+   scroll position. Kept quiet — it's a hint, not a gauge. Height is written
+   live from the scroll handler, so no height transition (it would lag scroll). */
+.timeline-progress {
+  position: absolute;
+  right: 11px;
+  top: 0;
+  width: 2px;
+  height: 0;
+  border-radius: 1px;
+  background: var(--ember);
+  opacity: 0.16;
+  transition: opacity 160ms ease;
+}
+.timeline-open .timeline-progress {
+  opacity: 0.34;
+}
+
+/* One quiet tick per turn, crossing the track; only shown while the rail is
+   open so the resting state stays clean. */
+.timeline-mark {
+  position: absolute;
+  right: 7px;
+  width: 10px;
+  height: 2px;
+  margin-top: -1px;
+  border-radius: 1px;
+  background: var(--ink-mute);
+  opacity: 0.45;
+  pointer-events: none;
+}
+.timeline-mark-char {
+  right: 5px;
+  width: 14px;
+  background: var(--ember);
+  opacity: 0.55;
+}
+
+/* Time-gap section break: a short notch across the track; its italic label
+   fades in only when the rail is open. */
 .timeline-gap {
   position: absolute;
   right: 0;
@@ -75,18 +101,19 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 6px;
+  gap: 8px;
   transform: translateY(-50%);
   pointer-events: none;
 }
 .timeline-gap-rule {
-  flex: 0 0 11px;
+  flex: 0 0 16px;
   height: 1px;
   background: var(--ink-mute);
   opacity: 0.7;
 }
 .timeline-gap-label {
   flex: 1 1 auto;
+  min-width: 0;
   text-align: right;
   font-family: var(--font-user);
   font-style: italic;
@@ -100,27 +127,45 @@
   transition: opacity 140ms ease;
 }
 .timeline-open .timeline-gap-label {
-  opacity: 1;
+  opacity: 0.9;
 }
 
-/* Current-position thumb: a small ember pip on the rail. */
+/* A folded/compacted span: a faint hatched seam along the track. */
+.timeline-fold {
+  position: absolute;
+  right: 9px;
+  width: 6px;
+  border-radius: 3px;
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--ink-ghost) 0 2px,
+    transparent 2px 4px
+  );
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+/* Current-position thumb: an ember pip ringed in the page bg so it reads clearly
+   over the track and any ticks behind it. */
 .timeline-thumb {
   position: absolute;
-  right: -1px;
-  width: 13px;
-  height: 13px;
-  margin-top: -6px;
+  right: 7px;
+  width: 10px;
+  height: 10px;
+  margin-top: -5px;
+  top: 0;
   border-radius: 50%;
   background: var(--ember);
-  box-shadow: 0 0 8px var(--ember-glow);
-  transition: top 180ms ease;
+  box-shadow: 0 0 0 3px var(--bg), 0 0 10px var(--ember-glow);
+  /* `top` is written live from the scroll handler — no transition (it would
+     lag the scroll); only the entrance/opacity is animated. */
   pointer-events: none;
 }
 
 /* The whole-conversation time span, shown at the top when open. */
 .timeline-span {
   position: absolute;
-  top: -22px;
+  top: -20px;
   right: 0;
   font-family: var(--font-mono);
   font-size: 10px;
@@ -131,14 +176,16 @@
 
 @media (prefers-reduced-motion: reduce) {
   .timeline,
-  .timeline-tick,
+  .timeline-track,
+  .timeline-progress,
   .timeline-thumb,
   .timeline-gap-label {
     transition: none;
   }
 }
 :root[data-reduced-motion="on"] .timeline,
-:root[data-reduced-motion="on"] .timeline-tick,
+:root[data-reduced-motion="on"] .timeline-track,
+:root[data-reduced-motion="on"] .timeline-progress,
 :root[data-reduced-motion="on"] .timeline-thumb,
 :root[data-reduced-motion="on"] .timeline-gap-label {
   transition: none;

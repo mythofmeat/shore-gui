@@ -47,6 +47,12 @@
   /* density spacing scale (cozy default; compact tightens it below) */
   --density-stream-pad: 48px;
   --density-msg-gap: 32px;
+
+  /* Reading measure for the stream + composer. Adaptive: tracks the viewport so
+     margins shrink on wide windows instead of stranding the column in a sea of
+     empty space, but stays within a comfortable line length. Shared so the
+     composer column always lines up with the conversation column. */
+  --measure: clamp(640px, 78vw, 1080px);
 }
 
 /* Explicit pins. data-theme="light" applies the warm parchment palette — warm
@@ -204,7 +210,7 @@ main.stream {
   padding: 0 28px;
 }
 .stream-inner {
-  max-width: 680px;
+  max-width: var(--measure);
   margin: 0 auto;
   padding: var(--density-stream-pad) 0;
 }
@@ -589,6 +595,10 @@ main.stream {
 }
 
 /* ---------- markdown ---------- */
+/* Break long unbreakable runs (giant tokens, URLs, hashes, paths) so a message
+   body can never push wider than its column. Code blocks (white-space: pre)
+   and tables keep their own overflow-x scrolling and are unaffected. */
+.markdown { overflow-wrap: anywhere; }
 .markdown > *:first-child { margin-top: 0; }
 .markdown > *:last-child { margin-bottom: 0; }
 
@@ -731,7 +741,7 @@ footer.composer {
   background: var(--bg);
   position: relative;
 }
-.input-wrap { max-width: 680px; margin: 0 auto; }
+.input-wrap { max-width: var(--measure); margin: 0 auto; }
 .input-row { display: flex; align-items: flex-start; gap: 12px; }
 .input-prompt {
   color: var(--ember);

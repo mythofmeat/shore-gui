@@ -166,11 +166,18 @@ export function useDaemon(): DaemonHandle {
   const lastAddrRef = useRef<string | null>(null);
 
   useEffect(() => {
-    let unlistenStatus: UnlistenFn | undefined;
-    let unlistenMsg: UnlistenFn | undefined;
+    // `listen` is async, so the unlisten handles only exist after an await. If
+    // the effect is torn down before they resolve (React StrictMode mounts,
+    // unmounts, then remounts in dev), a synchronous cleanup that reads the
+    // handles would see `undefined` and leak the subscription — leaving two
+    // live `server-message` listeners that dispatch every frame twice. Track a
+    // `disposed` flag and collect handles as they attach, mirroring the pattern
+    // used for the menu/tray listeners in App.tsx.
+    let disposed = false;
+    const unlistens: UnlistenFn[] = [];
 
     (async () => {
-      unlistenStatus = await listen<ConnectionStatus>("connection-status", (e) => {
+      const unlistenStatus = await listen<ConnectionStatus>("connection-status", (e) => {
         dispatch({ type: "connection", status: e.payload });
         if (e.payload.kind === "connected") {
           try {
@@ -180,9 +187,20 @@ export function useDaemon(): DaemonHandle {
           }
         }
       });
-      unlistenMsg = await listen<ServerMessageEvent>("server-message", (e) => {
+      if (disposed) {
+        unlistenStatus();
+        return;
+      }
+      unlistens.push(unlistenStatus);
+
+      const unlistenMsg = await listen<ServerMessageEvent>("server-message", (e) => {
         dispatch({ type: "frame", frame: e.payload });
       });
+      if (disposed) {
+        unlistenMsg();
+        return;
+      }
+      unlistens.push(unlistenMsg);
 
       const stored = readStoredAddr();
       const addr = stored.length > 0 ? stored : null;
@@ -195,8 +213,8 @@ export function useDaemon(): DaemonHandle {
     })();
 
     return () => {
-      unlistenStatus?.();
-      unlistenMsg?.();
+      disposed = true;
+      unlistens.forEach((u) => u());
     };
   }, []);
 
