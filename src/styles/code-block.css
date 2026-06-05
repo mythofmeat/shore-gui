@@ -1,0 +1,88 @@
+/* ---------- syntax-highlighted code blocks (#24) ---------- */
+/* prism-react-renderer drives token colors via inline styles from a JS theme
+   object (see CodeBlock.tsx). The chrome — frame, copy button, language label —
+   lives here so it themes off the shared CSS tokens. */
+
+.code-block {
+  position: relative;
+  margin: 0 0 12px;
+}
+
+/* The frame mirrors `.markdown pre` so highlighted and plain blocks read alike. */
+.code-block pre.code-block-pre {
+  margin: 0;
+  background: var(--bg-elev);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 10px 12px;
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  line-height: 1.5;
+  /* token colors come from the inline theme; this is the fallback ink. */
+  color: var(--ink);
+}
+
+.code-block-line { display: block; }
+
+/* Hover-revealed chrome row pinned to the top-right corner. */
+.code-block-chrome {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  opacity: 0;
+  transition: opacity 120ms ease;
+  pointer-events: none;
+}
+.code-block:hover .code-block-chrome,
+.code-block:focus-within .code-block-chrome {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.code-block-lang {
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  user-select: none;
+}
+
+.code-block-copy {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  color: var(--ink-dim);
+  background: var(--bg);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 2px 7px;
+  cursor: pointer;
+  transition: color 120ms ease, border-color 120ms ease;
+}
+.code-block-copy:hover {
+  color: var(--ember);
+  border-color: var(--ember-dim);
+}
+.code-block-copy.copied {
+  color: var(--ember);
+  border-color: var(--ember-dim);
+}
+
+/* user-side messages right-align the markdown; keep code chrome left-readable. */
+.msg.user .code-block { text-align: left; }
+
+@media (prefers-reduced-motion: reduce) {
+  :root:not([data-reduced-motion="off"]) .code-block-chrome,
+  :root:not([data-reduced-motion="off"]) .code-block-copy {
+    transition: none;
+  }
+}
+:root[data-reduced-motion="on"] .code-block-chrome,
+:root[data-reduced-motion="on"] .code-block-copy {
+  transition: none;
+}

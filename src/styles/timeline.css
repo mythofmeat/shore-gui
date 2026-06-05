@@ -1,0 +1,145 @@
+/* ---------- conversation timeline / scrubber (#29) ---------- */
+/*
+ * A slim rail pinned to the right margin of the stream. At rest it's a quiet
+ * hairline of ticks whose weight reads as message density; on hover it widens
+ * and reveals time-gap labels and the span. Meant to feel like a literary
+ * margin, not a scrollbar gadget.
+ */
+
+.timeline {
+  position: fixed;
+  top: 96px;
+  bottom: 120px;
+  right: 10px;
+  width: 14px;
+  z-index: 30;
+  display: flex;
+  justify-content: flex-end;
+  /* Don't eat clicks on the empty track — only the ticks/labels are targets. */
+  pointer-events: none;
+  transition: width 160ms ease;
+}
+.timeline-open {
+  width: 168px;
+}
+
+.timeline-rail {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  pointer-events: auto;
+}
+
+/* A density tick. Anchored to the right edge; heat is applied inline as opacity
+   + horizontal scale so a dense passage reads heavier. */
+.timeline-tick {
+  position: absolute;
+  right: 0;
+  width: 11px;
+  min-height: 2px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 2px 0 0 2px;
+  background: var(--ember);
+  transform-origin: right center;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: opacity 120ms ease, filter 120ms ease;
+}
+.timeline-tick:hover {
+  filter: brightness(1.25);
+  opacity: 1 !important;
+}
+
+/* A folded/compacted span: a faint hatched seam rather than a solid tick. */
+.timeline-fold {
+  position: absolute;
+  right: 0;
+  width: 11px;
+  border-radius: 2px 0 0 2px;
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--ink-ghost) 0 2px,
+    transparent 2px 4px
+  );
+  opacity: 0.5;
+}
+
+/* Time-gap marker: a hairline across the rail; its italic label only shows when
+   the rail is hovered/open. */
+.timeline-gap {
+  position: absolute;
+  right: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+.timeline-gap-rule {
+  flex: 0 0 11px;
+  height: 1px;
+  background: var(--ink-mute);
+  opacity: 0.7;
+}
+.timeline-gap-label {
+  flex: 1 1 auto;
+  text-align: right;
+  font-family: var(--font-user);
+  font-style: italic;
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  color: var(--ink-mute);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0;
+  transition: opacity 140ms ease;
+}
+.timeline-open .timeline-gap-label {
+  opacity: 1;
+}
+
+/* Current-position thumb: a small ember pip on the rail. */
+.timeline-thumb {
+  position: absolute;
+  right: -1px;
+  width: 13px;
+  height: 13px;
+  margin-top: -6px;
+  border-radius: 50%;
+  background: var(--ember);
+  box-shadow: 0 0 8px var(--ember-glow);
+  transition: top 180ms ease;
+  pointer-events: none;
+}
+
+/* The whole-conversation time span, shown at the top when open. */
+.timeline-span {
+  position: absolute;
+  top: -22px;
+  right: 0;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--ink-mute);
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .timeline,
+  .timeline-tick,
+  .timeline-thumb,
+  .timeline-gap-label {
+    transition: none;
+  }
+}
+:root[data-reduced-motion="on"] .timeline,
+:root[data-reduced-motion="on"] .timeline-tick,
+:root[data-reduced-motion="on"] .timeline-thumb,
+:root[data-reduced-motion="on"] .timeline-gap-label {
+  transition: none;
+}

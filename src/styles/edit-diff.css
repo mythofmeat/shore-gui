@@ -1,0 +1,72 @@
+/* ---------- edit-message diff view (#26) ---------- */
+
+.edit-diff {
+  margin: 6px 0 2px;
+  max-height: 180px;
+  overflow-y: auto;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--bg);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.edit-diff-empty {
+  padding: 8px 10px;
+  color: var(--ink-ghost);
+  font-style: italic;
+}
+
+.edit-diff-line {
+  display: flex;
+  gap: 8px;
+  padding: 0 8px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.edit-diff-gutter {
+  flex: 0 0 1ch;
+  color: var(--ink-ghost);
+  user-select: none;
+}
+.edit-diff-text {
+  flex: 1 1 auto;
+}
+
+.edit-diff-eq {
+  color: var(--ink-mute);
+}
+.edit-diff-add {
+  background: color-mix(in srgb, #8fae6a 16%, transparent);
+  color: var(--ink);
+}
+.edit-diff-add .edit-diff-gutter {
+  color: #8fae6a;
+}
+.edit-diff-del {
+  background: color-mix(in srgb, var(--ember-dim) 14%, transparent);
+  color: var(--ink-dim);
+}
+.edit-diff-del .edit-diff-text {
+  text-decoration: line-through;
+  text-decoration-color: var(--ink-ghost);
+}
+.edit-diff-del .edit-diff-gutter {
+  color: var(--ember-dim);
+}
+
+.composer-diff-toggle {
+  border: none;
+  background: none;
+  color: var(--ink-mute);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  padding: 0;
+  transition: color 100ms ease;
+}
+.composer-diff-toggle:hover {
+  color: var(--ember);
+}

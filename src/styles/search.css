@@ -1,0 +1,87 @@
+/* ---------- full-text search (#30) ---------- */
+
+.search-bar {
+  position: fixed;
+  top: 14px;
+  right: 18px;
+  z-index: 1500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: var(--bg-elev);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.36);
+}
+
+.search-bar-icon {
+  color: var(--ink-mute);
+  flex: 0 0 auto;
+}
+
+.search-bar-input {
+  width: 200px;
+  border: none;
+  background: none;
+  outline: none;
+  font-family: var(--font-user);
+  font-size: 14px;
+  color: var(--ink);
+}
+.search-bar-input::placeholder {
+  color: var(--ink-ghost);
+}
+
+.search-bar-count {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-mute);
+  min-width: 34px;
+  text-align: right;
+}
+
+.search-bar-btn {
+  border: none;
+  background: none;
+  color: var(--ink-mute);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: 4px;
+  transition: color 100ms ease, background 100ms ease;
+}
+.search-bar-btn:hover:not(:disabled) {
+  color: var(--ember);
+  background: var(--bg);
+}
+.search-bar-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.search-bar-close {
+  font-size: 17px;
+}
+
+/* Match highlights in the message bodies. */
+.search-plain {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.search-hit {
+  background: color-mix(in srgb, var(--ember-glow) 70%, transparent);
+  color: var(--ink);
+  border-radius: 2px;
+  padding: 0 1px;
+}
+.search-hit-active {
+  background: var(--ember);
+  color: var(--bg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .search-bar-btn {
+    transition: none;
+  }
+}

@@ -1,6 +1,7 @@
 use ksni::{menu::StandardItem, Icon, MenuItem, Tray, TrayMethods};
 use shore_swp_client::ConnCommand;
 use std::io::Cursor;
+use std::sync::OnceLock;
 use tauri::{AppHandle, Manager};
 use tracing::warn;
 
@@ -11,13 +12,29 @@ struct ShoreTray {
     icons: Vec<Icon>,
 }
 
+impl ShoreTray {
+    /// Read the shared tray status (#36) and map it, or None if state isn't
+    /// ready yet. Used by `title`/`menu` so they reflect the live unread count
+    /// and last-message preview.
+    fn with_status<T>(&self, f: impl FnOnce(&crate::TrayStatus) -> T) -> Option<T> {
+        let state = self.app.try_state::<AppState>()?;
+        let guard = state.tray.lock().ok()?;
+        Some(f(&guard))
+    }
+}
+
+/// The live ksni tray handle, retained so `refresh` can ask it to re-render
+/// when the dynamic status (#36) changes. Set once, when the tray spawns.
+static TRAY: OnceLock<ksni::Handle<ShoreTray>> = OnceLock::new();
+
 impl Tray for ShoreTray {
     fn id(&self) -> String {
         "shore-gui".into()
     }
 
     fn title(&self) -> String {
-        "Shore".into()
+        self.with_status(crate::tray_tooltip)
+            .unwrap_or_else(|| "Shore".into())
     }
 
     fn icon_pixmap(&self) -> Vec<Icon> {
@@ -29,10 +46,32 @@ impl Tray for ShoreTray {
     }
 
     fn menu(&self) -> Vec<MenuItem<Self>> {
+        // Informational, disabled row showing unread count + last preview (#36).
+        let status_label = self
+            .with_status(crate::tray_preview_label)
+            .unwrap_or_else(|| "Shore".into());
         vec![
+            StandardItem {
+                label: status_label,
+                enabled: false,
+                ..Default::default()
+            }
+            .into(),
+            MenuItem::Separator,
             StandardItem {
                 label: "Show Shore".into(),
                 activate: Box::new(|this: &mut Self| show_main_window(&this.app)),
+                ..Default::default()
+            }
+            .into(),
+            StandardItem {
+                // True inline text entry isn't possible in an SNI tray menu, so
+                // quick-reply surfaces + focuses the window on the composer.
+                label: "Quick reply…".into(),
+                activate: Box::new(|this: &mut Self| {
+                    show_main_window(&this.app);
+                    crate::emit(&this.app, "tray://quick-reply", ());
+                }),
                 ..Default::default()
             }
             .into(),
@@ -102,12 +141,23 @@ pub fn spawn(app: AppHandle) {
     tauri::async_runtime::spawn(async move {
         match (ShoreTray { app, icons }).spawn().await {
             Ok(handle) => {
-                // Keep the tray service alive for the program's lifetime.
-                std::mem::forget(handle);
+                // Retain the handle so refresh() can re-render on status change.
+                let _ = TRAY.set(handle);
             }
             Err(e) => warn!(error = %e, "failed to spawn ksni tray"),
         }
     });
+}
+
+/// Ask the ksni tray to re-render so its title + menu pick up the latest
+/// dynamic status (#36). No-op until the tray has spawned.
+pub fn refresh(_app: &AppHandle) {
+    if let Some(handle) = TRAY.get() {
+        let handle = handle.clone();
+        tauri::async_runtime::spawn(async move {
+            handle.update(|_tray: &mut ShoreTray| {}).await;
+        });
+    }
 }
 
 fn decode_png_to_icon(bytes: &[u8]) -> Option<Icon> {
