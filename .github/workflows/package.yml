@@ -1,0 +1,20 @@
+name: Build and publish Arch package
+
+# A `v*` tag (cut by release-plz on merge of its release PR) builds the
+# contrib/PKGBUILD in an Arch container and merges the package into the
+# rolling `latest` release of mythofmeat/repo-arch.
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  publish:
+    permissions:
+      contents: write
+    uses: mythofmeat/repo-arch/.github/workflows/publish-arch-rust.yml@main
+    with:
+      pkgbuild_dir: contrib
+      # bun builds the frontend; the rest is the Tauri WebKit/GTK stack so
+      # makepkg's dependency check and the cargo link step both resolve.
+      extra_pacman_packages: "bun webkit2gtk-4.1 gtk3 libayatana-appindicator"
+    secrets: inherit

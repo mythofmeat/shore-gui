@@ -1,0 +1,42 @@
+name: release-plz
+
+# On push to main, release-plz opens/updates a release PR that bumps the
+# version (src-tauri/Cargo.toml) and updates the changelog from conventional
+# commits. Merging that PR tags `v<version>`, which triggers package.yml.
+#
+# Unlike the other Silvershore repos, shore-gui's Cargo project lives in
+# src-tauri/ rather than the repo root, so it calls the release-plz action
+# directly with `manifest_path` instead of the reusable release-plz-rust.yml
+# workflow (which assumes a root manifest). shore-gui is a GUI app, not a
+# published crate, so `publish = false` in release-plz.toml — no crates.io
+# token needed.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  release-plz:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    concurrency:
+      group: release-plz-${{ github.ref }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Run release-plz
+        uses: MarcoIeni/release-plz-action@v0.5
+        with:
+          manifest_path: src-tauri/Cargo.toml
+        env:
+          # REPO_ARCH_TOKEN (a PAT) lets release-plz's tag push trigger
+          # package.yml; the default GITHUB_TOKEN would not (anti-recursion).
+          GITHUB_TOKEN: ${{ secrets.REPO_ARCH_TOKEN || secrets.GITHUB_TOKEN }}

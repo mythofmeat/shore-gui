@@ -1,0 +1,56 @@
+# Maintainer: eshen
+pkgname=shore-gui
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='Desktop GUI client for the Silvershore chat daemon (Tauri 2)'
+arch=('x86_64')
+url='https://github.com/mythofmeat/shore-gui'
+license=('MIT OR Apache-2.0')
+# Tauri uses the system WebView (webkit2gtk) rather than bundling a browser
+# engine, so the runtime footprint is the GTK/WebKit stack. The tray-icon
+# feature links libayatana-appindicator even though the live Linux tray is the
+# pure-Rust ksni implementation.
+depends=('webkit2gtk-4.1' 'gtk3' 'libayatana-appindicator' 'gcc-libs')
+makedepends=('cargo' 'git' 'bun' 'webkit2gtk-4.1' 'gtk3' 'libayatana-appindicator')
+provides=('shore-gui')
+conflicts=('shore-gui')
+source=("${pkgname}::git+ssh://git@github.com/mythofmeat/shore-gui.git")
+options=('!lto' '!debug' 'strip')
+sha256sums=('SKIP')
+
+prepare() {
+    cd "${pkgname}/src-tauri"
+    export RUSTUP_TOOLCHAIN=stable
+    cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+}
+
+build() {
+    cd "${pkgname}"
+    export RUSTUP_TOOLCHAIN=stable
+
+    # Frontend first: `bun run build` (tsc + vite) emits ../dist, which
+    # tauri-build embeds into the binary at compile time (frontendDist in
+    # tauri.conf.json). The cargo build below is therefore self-contained.
+    bun install --frozen-lockfile
+    bun run build
+
+    cd src-tauri
+    # Keep this line verbatim: the publish-arch-rust CI workflow rewrites it to
+    # repoint target/ at a cached host directory. Locally it just sets the
+    # cargo target dir to src-tauri/target.
+    export CARGO_TARGET_DIR=target
+    cargo build --release --frozen
+}
+
+package() {
+    cd "${pkgname}"
+
+    install -Dm755 "src-tauri/target/release/${pkgname}" "$pkgdir/usr/bin/${pkgname}"
+
+    install -Dm644 contrib/shore.desktop \
+        "$pkgdir/usr/share/applications/dev.shore.gui.desktop"
+    install -Dm644 src-tauri/icons/128x128.png \
+        "$pkgdir/usr/share/icons/hicolor/128x128/apps/dev.shore.gui.png"
+    install -Dm644 src-tauri/icons/32x32.png \
+        "$pkgdir/usr/share/icons/hicolor/32x32/apps/dev.shore.gui.png"
+}
