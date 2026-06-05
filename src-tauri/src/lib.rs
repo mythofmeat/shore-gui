@@ -10,10 +10,10 @@ use shore_protocol::client_msg::{
     Cancel, ClientMessage, ClientMessageBody, Command, ImageUpload, Regen,
 };
 use shore_swp_client::{spawn_connection, ConnCommand, ConnEvent};
-#[cfg(not(target_os = "linux"))]
-use tauri::tray::{MouseButton, MouseButtonState, TrayIconEvent};
 #[cfg(target_os = "macos")]
 use tauri::menu::AboutMetadata;
+#[cfg(not(target_os = "linux"))]
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconEvent};
 use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem, Submenu},
     AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder, WindowEvent,
@@ -95,13 +95,8 @@ async fn connect(
         let _ = old_tx.send(ConnCommand::Shutdown).await;
     }
 
-    let (cmd_tx, mut event_rx) = spawn_connection(
-        target.clone(),
-        None,
-        CLIENT_TYPE,
-        CLIENT_NAME,
-        character,
-    );
+    let (cmd_tx, mut event_rx) =
+        spawn_connection(target.clone(), None, CLIENT_TYPE, CLIENT_NAME, character);
     *guard = Some(cmd_tx);
     drop(guard);
     *state.addr.lock().await = target;
@@ -208,10 +203,7 @@ async fn send_command(
 }
 
 #[tauri::command]
-async fn regen(
-    guidance: Option<String>,
-    state: State<'_, AppState>,
-) -> Result<String, String> {
+async fn regen(guidance: Option<String>, state: State<'_, AppState>) -> Result<String, String> {
     let guard = state.connection.lock().await;
     let tx = guard.as_ref().ok_or("not connected")?;
     let rid = make_rid("regen");
