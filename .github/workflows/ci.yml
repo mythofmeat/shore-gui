@@ -2,7 +2,7 @@ name: CI
 
 # shore-gui is a Tauri 2 + Vite + React app. CI needs the Tauri Linux
 # system deps so `tauri-build` (run from src-tauri/build.rs) can compile
-# the Rust crate, plus pnpm for the JS side. This is a one-off workflow
+# the Rust crate, plus Bun for the JS side. This is a one-off workflow
 # rather than calling the rust reusable workflow, because Tauri builds
 # don't fit the plain `cargo` pattern.
 
@@ -57,15 +57,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
-
-      - uses: actions/setup-node@v4
+      - uses: oven-sh/setup-bun@v2
         with:
-          node-version: 20
-          cache: pnpm
+          bun-version: 1.3.14
 
-      - name: pnpm install
-        run: pnpm install --frozen-lockfile
+      - name: bun install
+        run: bun install --frozen-lockfile
 
-      - name: pnpm build (tsc + vite)
-        run: pnpm build
+      - name: bun build (tsc + vite)
+        run: bun run build

@@ -11,13 +11,13 @@ unfinished surfaces. Pinned to no particular release cadence yet.
 Requires:
 
 - Rust stable
-- [pnpm](https://pnpm.io/)
+- [Bun](https://bun.sh/)
 - Tauri's [system prerequisites](https://tauri.app/start/prerequisites/)
   for your OS (on Linux: `libwebkit2gtk-4.1`, `libgtk-3`, etc.)
 
 ```
-pnpm install
-pnpm tauri dev
+bun install
+bun tauri dev
 ```
 
 ## Related crates
