@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Shore
+Comment=Desktop GUI client for the Silvershore chat daemon
+Exec=shore-gui
+Icon=dev.shore.gui
+Terminal=false
+Categories=Network;InstantMessaging;Chat;
+StartupWMClass=Shore

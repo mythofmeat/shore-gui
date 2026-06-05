@@ -1,0 +1,10 @@
+[workspace]
+git_release_enable = true
+changelog_update = true
+
+# shore-gui is a desktop app distributed as an Arch package, not a library on
+# crates.io — release it (tag + GitHub release + changelog) but don't publish.
+[[package]]
+name = "shore-gui"
+publish = false
+release = true
