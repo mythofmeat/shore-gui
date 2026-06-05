@@ -19,13 +19,13 @@
    once here. */
 :root {
   /* dark palette (default) */
-  --bg: #1f1916;
-  --bg-elev: #2a221d;
+  --bg: #191310;
+  --bg-elev: #241d18;
   --ink: #f0e8de;
-  --ink-char: #dcd2c7;
-  --ink-dim: #bdb1a4;
-  --ink-mute: #857866;
-  --ink-ghost: #5a4f44;
+  --ink-char: #e6ddd2;
+  --ink-dim: #cdc2b3;
+  --ink-mute: #a89a86;
+  --ink-ghost: #8a7d6d;
   --ember: #ee8a3a;
   --ember-dim: #d05020;
   --ember-glow: rgba(238, 138, 58, 0.22);
@@ -65,21 +65,21 @@
   --ink: #2c2118;
   --ink-char: #3a2d20;
   --ink-dim: #5c4c3a;
-  --ink-mute: #8a7458;
-  --ink-ghost: #b3a282;
+  --ink-mute: #756042;
+  --ink-ghost: #978560;
   --ember: #c75d18;
   --ember-dim: #a8420f;
   --ember-glow: rgba(199, 93, 24, 0.16);
   --rule: #d8c9ad;
 }
 :root[data-theme="dark"] {
-  --bg: #1f1916;
-  --bg-elev: #2a221d;
+  --bg: #191310;
+  --bg-elev: #241d18;
   --ink: #f0e8de;
-  --ink-char: #dcd2c7;
-  --ink-dim: #bdb1a4;
-  --ink-mute: #857866;
-  --ink-ghost: #5a4f44;
+  --ink-char: #e6ddd2;
+  --ink-dim: #cdc2b3;
+  --ink-mute: #a89a86;
+  --ink-ghost: #8a7d6d;
   --ember: #ee8a3a;
   --ember-dim: #d05020;
   --ember-glow: rgba(238, 138, 58, 0.22);
@@ -318,7 +318,7 @@ main.stream {
 }
 .msg.char .body {
   font-family: var(--font-body);
-  font-variation-settings: "wght" 380;
+  font-variation-settings: "wght" 420;
   font-size: 17px;
   line-height: 1.65;
   color: var(--ink-char);
