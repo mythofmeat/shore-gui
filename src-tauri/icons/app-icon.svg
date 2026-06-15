@@ -1,0 +1,37 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Warm dark background, matching the app bg ramp -->
+    <radialGradient id="bg" cx="50%" cy="42%" r="75%">
+      <stop offset="0%" stop-color="#241d18"/>
+      <stop offset="100%" stop-color="#140f0c"/>
+    </radialGradient>
+    <!-- Ember fill for the sigil, matching the ember palette -->
+    <linearGradient id="ember" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#ffb05a"/>
+      <stop offset="55%" stop-color="#ee8a3a"/>
+      <stop offset="100%" stop-color="#d05020"/>
+    </linearGradient>
+    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="26" result="b"/>
+      <feMerge>
+        <feMergeNode in="b"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Rounded-square background (macOS/Windows squircle-ish; trimmed on Linux) -->
+  <rect x="0" y="0" width="1024" height="1024" rx="224" fill="url(#bg)"/>
+
+  <!-- The ✦ sigil: a four-pointed star drawn with concave edges so it reads as
+       a sparkle. Centered, sized to leave a comfortable margin. -->
+  <g filter="url(#glow)">
+    <path fill="url(#ember)" d="
+      M512 152
+      C 540 360, 664 484, 872 512
+      C 664 540, 540 664, 512 872
+      C 484 664, 360 540, 152 512
+      C 360 484, 484 360, 512 152
+      Z"/>
+  </g>
+</svg>

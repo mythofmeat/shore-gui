@@ -44,6 +44,9 @@
   /* body font multiplier, driven by UiSettingsEffects (--font-scale) */
   --font-scale: 1;
 
+  /* custom titlebar height (#48) */
+  --titlebar-h: 34px;
+
   /* density spacing scale (cozy default; compact tightens it below) */
   --density-stream-pad: 48px;
   --density-msg-gap: 32px;
@@ -906,18 +909,18 @@ footer.composer {
 }
 .composer-attach-btn:disabled { cursor: not-allowed; opacity: 0.4; }
 
-/* ---------- settings menu ---------- */
+/* ---------- settings menu ----------
+   Lives inside the custom titlebar (#48); relative so its absolute
+   .settings-panel still anchors to the gear. */
 .settings-menu {
-  position: fixed;
-  top: 14px;
-  right: 16px;
-  z-index: 40;
+  position: relative;
+  display: flex;
 }
 .settings-gear {
   background: none;
   border: 1px solid var(--rule);
   color: var(--ink-mute);
-  width: 32px; height: 32px; border-radius: 50%;
+  width: 28px; height: 28px; border-radius: 50%;
   cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   transition: border-color 140ms, color 140ms, background 140ms, box-shadow 140ms;
@@ -1171,14 +1174,11 @@ footer.composer {
 
 /* ---------- notices trigger (bell) ---------- */
 .notices-trigger {
-  position: fixed;
-  top: 14px;
-  right: 56px;
-  z-index: 40;
+  position: relative;
   background: none;
   border: 1px solid var(--rule);
   color: var(--ink-mute);
-  width: 32px; height: 32px; border-radius: 50%;
+  width: 28px; height: 28px; border-radius: 50%;
   cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   transition: border-color 140ms, color 140ms, background 140ms, box-shadow 140ms;

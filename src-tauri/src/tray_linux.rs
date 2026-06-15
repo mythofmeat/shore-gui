@@ -130,9 +130,11 @@ fn disconnect(app: AppHandle) {
 pub fn spawn(app: AppHandle) {
     // ARGB32, network byte order — SNI spec. Source PNGs are 8-bit RGBA, so
     // decode_png_to_icon rotates each pixel one byte right to move A first.
+    // Transparent, plate-less sigil so it blends into the panel instead of
+    // showing a dark square (#48). The bundled app icon keeps its squircle.
     let icons: Vec<Icon> = [
-        &include_bytes!("../icons/32x32.png")[..],
-        &include_bytes!("../icons/128x128.png")[..],
+        &include_bytes!("../icons/tray-32.png")[..],
+        &include_bytes!("../icons/tray-128.png")[..],
     ]
     .into_iter()
     .filter_map(decode_png_to_icon)

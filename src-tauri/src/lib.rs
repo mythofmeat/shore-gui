@@ -329,13 +329,21 @@ async fn open_window(label: Option<String>, app: AppHandle) -> Result<String, St
         return Ok(label);
     }
 
-    WebviewWindowBuilder::new(&app, &label, WebviewUrl::App("index.html".into()))
+    let window = WebviewWindowBuilder::new(&app, &label, WebviewUrl::App("index.html".into()))
         .title("Shore")
         .inner_size(1100.0, 750.0)
         .min_inner_size(640.0, 480.0)
         .resizable(true)
+        .decorations(false)
         .build()
         .map_err(|e| e.to_string())?;
+
+    // Match the main window: hide the in-window menubar on Linux/Windows so the
+    // custom titlebar (#48) is the only chrome (no-op on macOS).
+    #[cfg(not(target_os = "macos"))]
+    let _ = window.hide_menu();
+    #[cfg(target_os = "macos")]
+    let _ = &window;
 
     debug!(%label, "opened pop-out window");
     Ok(label)
@@ -982,9 +990,17 @@ pub fn run() {
             });
 
             // Native OS menubar (#37). Items emit `menu://<id>` events.
+            // On macOS this is the system menu bar; on Linux/Windows it would
+            // render an in-window GTK menubar that clashes with our custom
+            // titlebar (#48), so we keep the menu attached (for accelerators +
+            // `menu://` events) but hide its visible bar per window below.
             let menu = build_app_menu(app.handle())?;
             app.set_menu(menu)?;
             app.on_menu_event(|app, event| handle_menu_event(app, event.id.as_ref()));
+            #[cfg(not(target_os = "macos"))]
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.hide_menu();
+            }
 
             #[cfg(target_os = "linux")]
             tray_linux::spawn(app.handle().clone());
