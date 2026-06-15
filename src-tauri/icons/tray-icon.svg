@@ -1,0 +1,28 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="ember" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#ffb05a"/>
+      <stop offset="55%" stop-color="#ee8a3a"/>
+      <stop offset="100%" stop-color="#d05020"/>
+    </linearGradient>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="14" result="b"/>
+      <feMerge>
+        <feMergeNode in="b"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- The bare ember sigil on transparency, scaled to fill the canvas so it
+       reads at small tray sizes without a background plate. -->
+  <g filter="url(#glow)" transform="translate(512 512) scale(1.28) translate(-512 -512)">
+    <path fill="url(#ember)" d="
+      M512 152
+      C 540 360, 664 484, 872 512
+      C 664 540, 540 664, 512 872
+      C 484 664, 360 540, 152 512
+      C 360 484, 484 360, 512 152
+      Z"/>
+  </g>
+</svg>

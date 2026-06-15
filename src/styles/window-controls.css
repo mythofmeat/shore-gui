@@ -1,39 +1,117 @@
-/* Multi-pane / pop-out windows (#31). A quiet, hover-revealed titlebar button
- * an integrator may render to open another window. Themed via the shared CSS
- * custom properties so it follows the ember palette automatically. */
+/* Custom titlebar (#48) — replaces GTK's client-side decoration with a slim,
+ * theme-aware bar drawn in React. Imported from Titlebar.tsx. All colors come
+ * from the shared palette vars so the bar follows light/dark + ember
+ * automatically. */
 
-.window-new {
-  display: inline-flex;
+.titlebar {
+  display: flex;
+  align-items: center;
+  flex: 0 0 var(--titlebar-h);
+  height: var(--titlebar-h);
+  padding: 0 6px 0 12px;
+  gap: 6px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--rule);
+  -webkit-user-select: none;
+  user-select: none;
+  position: relative;
+  z-index: 40;
+}
+
+.titlebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.titlebar-brand .sigil {
+  font-size: 16px;
+}
+
+.titlebar-title {
+  font-family: var(--font-user);
+  font-size: 14px;
+  letter-spacing: 0.04em;
+  color: var(--ink-dim);
+}
+
+/* The flexible drag region — carries the move/double-click-maximize affordance
+ * across the empty middle of the bar. */
+.titlebar-spacer {
+  flex: 1;
+  align-self: stretch;
+}
+
+.titlebar-divider {
+  width: 1px;
+  height: 18px;
+  margin: 0 4px;
+  background: var(--rule);
+}
+
+/* ---------- window controls (minimize / maximize / close, KDE order) ------- */
+.win-controls {
+  display: flex;
+  align-items: center;
+}
+
+.win-btn {
+  display: flex;
   align-items: center;
   justify-content: center;
-  width: 1.75rem;
-  height: 1.75rem;
+  width: 28px;
+  height: 28px;
   padding: 0;
   border: none;
   border-radius: 6px;
   background: transparent;
-  color: var(--ink-ghost);
+  color: var(--ink-mute);
   cursor: pointer;
   transition: color 120ms ease, background-color 120ms ease;
 }
 
-.window-new:hover,
-.window-new:focus-visible {
+.win-btn:hover,
+.win-btn:focus-visible {
   color: var(--ember);
   background: var(--bg-elev);
 }
 
-.window-new:focus-visible {
-  outline: 1px solid var(--ember-dim);
-  outline-offset: 1px;
+.win-btn.close:hover,
+.win-btn.close:focus-visible {
+  color: #fff;
+  background: #d04a3a;
 }
 
-.window-new svg {
+.win-btn:focus-visible {
+  outline: none;
+}
+
+.win-btn svg {
   display: block;
 }
 
+/* ---------- edge/corner resize handles ------------------------------------
+ * A borderless Wayland window loses native edge-resize, so we lay 8 thin,
+ * transparent, fixed handles over the window chrome. Each starts a Tauri
+ * resize-drag in its direction (see Titlebar.tsx). ~5px so they're grabbable
+ * but invisible; raised above the bar so the top edge stays resizable. */
+.titlebar-resize {
+  position: fixed;
+  z-index: 100;
+}
+
+.titlebar-resize.n { top: 0; left: 0; right: 0; height: 4px; cursor: ns-resize; }
+.titlebar-resize.s { bottom: 0; left: 0; right: 0; height: 4px; cursor: ns-resize; }
+.titlebar-resize.w { top: 0; bottom: 0; left: 0; width: 4px; cursor: ew-resize; }
+.titlebar-resize.e { top: 0; bottom: 0; right: 0; width: 4px; cursor: ew-resize; }
+
+.titlebar-resize.nw { top: 0; left: 0; width: 8px; height: 8px; cursor: nwse-resize; }
+.titlebar-resize.ne { top: 0; right: 0; width: 8px; height: 8px; cursor: nesw-resize; }
+.titlebar-resize.sw { bottom: 0; left: 0; width: 8px; height: 8px; cursor: nesw-resize; }
+.titlebar-resize.se { bottom: 0; right: 0; width: 8px; height: 8px; cursor: nwse-resize; }
+
 @media (prefers-reduced-motion: reduce) {
-  .window-new {
+  .win-btn {
     transition: none;
   }
 }
